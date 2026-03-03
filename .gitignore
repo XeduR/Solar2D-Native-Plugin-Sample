@@ -1,0 +1,60 @@
+# Build output
+build/
+build-*/
+dist/
+
+# Windows artifacts
+nul
+Thumbs.db
+Desktop.ini
+
+# Visual Studio
+*.obj
+*.lib
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.suo
+*.user
+*.sdf
+*.opensdf
+*.opendb
+.vs/
+Debug/
+Release/
+x64/
+x86/
+ipch/
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcworkspace
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Linux
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Lua compiled
+*.lu
+
+# Personal settings and build files
+node_modules/
+.claude/
+
+# Temporary and backup files
+*.tmp
+*.backup
+*.bak
+*~
+

@@ -1,0 +1,292 @@
+name: Build Plugin
+
+on:
+  workflow_dispatch:
+
+env:
+  PLUGIN_VERSION: "2025.3726"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Windows (x86)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      - name: Generate Lua 5.1 import library from .def
+        shell: cmd
+        run: lib /def:external\lua51\lua51.def /out:external\lua51\lua51.lib /machine:x86
+
+      - name: Configure CMake (x86)
+        run: >
+          cmake -B build -A Win32
+          -DLUA_LIBRARY="${{ github.workspace }}/external/lua51/lua51.lib"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Verify output
+        shell: bash
+        run: ls -la build/Release/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win32-sim
+          path: build/Release/plugin_hello.dll
+
+  build-macos:
+    name: macOS (Universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake (x86_64)
+        run: cmake -B build-x64 -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+      - name: Build (x86_64)
+        run: cmake --build build-x64 --config Release
+
+      - name: Configure CMake (arm64)
+        run: cmake -B build-arm64 -DCMAKE_OSX_ARCHITECTURES=arm64
+
+      - name: Build (arm64)
+        run: cmake --build build-arm64 --config Release
+
+      - name: Create universal binary
+        run: |
+          lipo -create \
+            build-x64/plugin_hello.dylib \
+            build-arm64/plugin_hello.dylib \
+            -output plugin_hello.dylib
+          lipo -info plugin_hello.dylib
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-sim
+          path: plugin_hello.dylib
+
+  build-linux:
+    name: Linux (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Verify output
+        run: |
+          ls -la build/
+          file build/plugin_hello.so
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: build/plugin_hello.so
+
+  build-ios:
+    name: iOS (device + simulator)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build iOS static libraries
+        run: |
+          chmod +x solar2d-native/ios/build.sh
+          solar2d-native/ios/build.sh build-ios
+
+      - name: Verify output
+        run: |
+          file build-ios/device/libplugin_hello.a
+          file build-ios/simulator/libplugin_hello.a
+
+      - name: Upload device artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone
+          path: build-ios/device/libplugin_hello.a
+
+      - name: Upload simulator artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-sim
+          path: build-ios/simulator/libplugin_hello.a
+
+  build-android:
+    name: Android (multi-ABI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Android shared libraries
+        run: |
+          chmod +x solar2d-native/android/build.sh
+          solar2d-native/android/build.sh build-android
+
+      - name: Verify output
+        run: |
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            file "build-android/$abi/libplugin_hello.so"
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: build-android/*/libplugin_hello.so
+
+  package:
+    name: Package Plugin Distribution
+    needs: [build-windows, build-macos, build-linux, build-ios, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create plugin distribution structure
+        run: |
+          VERSION="${{ env.PLUGIN_VERSION }}"
+
+          # Create platform directories
+          mkdir -p "dist/plugins/${VERSION}/win32-sim"
+          mkdir -p "dist/plugins/${VERSION}/mac-sim"
+          mkdir -p "dist/plugins/${VERSION}/linux"
+          mkdir -p "dist/plugins/${VERSION}/iphone"
+          mkdir -p "dist/plugins/${VERSION}/iphone-sim"
+          mkdir -p "dist/plugins/${VERSION}/android"
+          mkdir -p "dist/plugins/${VERSION}/web"
+
+          # Copy desktop platform binaries
+          cp artifacts/win32-sim/plugin_hello.dll "dist/plugins/${VERSION}/win32-sim/"
+          cp artifacts/mac-sim/plugin_hello.dylib "dist/plugins/${VERSION}/mac-sim/"
+          cp artifacts/linux/plugin_hello.so "dist/plugins/${VERSION}/linux/"
+
+          # Copy iOS static libraries
+          cp artifacts/iphone/libplugin_hello.a "dist/plugins/${VERSION}/iphone/"
+          cp artifacts/iphone-sim/libplugin_hello.a "dist/plugins/${VERSION}/iphone-sim/"
+
+          # Copy Android shared libraries (preserving ABI directory structure)
+          cp -r artifacts/android/* "dist/plugins/${VERSION}/android/"
+
+          # Copy HTML5 JavaScript plugin (no build step; source files used directly)
+          cp web/plugin_hello.js "dist/plugins/${VERSION}/web/"
+          cp web/metadata.lua "dist/plugins/${VERSION}/web/"
+
+          # Copy Lua fallback stub for unsupported platforms (no build step; source files used directly)
+          mkdir -p "dist/plugins/${VERSION}/lua"
+          cp lua/plugin_hello.lua "dist/plugins/${VERSION}/lua/"
+          cp lua/metadata.lua "dist/plugins/${VERSION}/lua/"
+
+          # Create metadata.lua for each desktop native platform (shared libraries)
+          for platform in win32-sim mac-sim linux; do
+          cat > "dist/plugins/${VERSION}/${platform}/metadata.lua" << 'METALUA'
+          local metadata =
+          {
+              plugin =
+              {
+                  format = "sharedLibrary",
+              },
+          }
+          return metadata
+          METALUA
+          done
+
+          # Create metadata.lua for iOS platforms (static libraries)
+          for platform in iphone iphone-sim; do
+          cat > "dist/plugins/${VERSION}/${platform}/metadata.lua" << 'METALUA'
+          local metadata =
+          {
+              plugin =
+              {
+                  format = "staticLibrary",
+              },
+          }
+          return metadata
+          METALUA
+          done
+
+          # Create metadata.lua for Android (shared libraries)
+          cat > "dist/plugins/${VERSION}/android/metadata.lua" << 'METALUA'
+          local metadata =
+          {
+              plugin =
+              {
+                  format = "sharedLibrary",
+              },
+          }
+          return metadata
+          METALUA
+
+          echo "Plugin distribution structure:"
+          find dist -type f | sort
+
+      - name: Create per-platform tarballs
+        run: |
+          VERSION="${{ env.PLUGIN_VERSION }}"
+
+          # Create ready-to-install structure: com.xedur/plugin.hello/<platform>/data.tgz
+          INSTALL_DIR="$(pwd)/dist/install"
+          for platform in win32-sim mac-sim linux iphone iphone-sim android web lua; do
+            mkdir -p "${INSTALL_DIR}/com.xedur/plugin.hello/${platform}"
+            tar -czf "${INSTALL_DIR}/com.xedur/plugin.hello/${platform}/data.tgz" -C "dist/plugins/${VERSION}/${platform}" .
+          done
+
+          echo "Install structure (copy into Solar2DPlugins):"
+          find dist/install -type f | sort
+
+          # Create flat tarballs for GitHub Releases and self-hosted distribution
+          mkdir -p dist/release
+          for platform in win32-sim mac-sim linux iphone iphone-sim android web lua; do
+            cp "dist/install/com.xedur/plugin.hello/${platform}/data.tgz" "dist/release/${platform}.tgz"
+          done
+
+          echo "Release tarballs:"
+          ls -la dist/release/
+
+      - name: Upload plugin distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-distribution
+          path: dist/plugins/
+
+      - name: Upload installable tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-tarballs
+          path: dist/install/
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/release/win32-sim.tgz
+            dist/release/mac-sim.tgz
+            dist/release/linux.tgz
+            dist/release/iphone.tgz
+            dist/release/iphone-sim.tgz
+            dist/release/android.tgz
+            dist/release/web.tgz
+            dist/release/lua.tgz
+          generate_release_notes: true

@@ -1,0 +1,37 @@
+settings =
+{
+    orientation =
+    {
+        default = "landscapeLeft",
+        supported = { "landscapeLeft, landscapeRight" },
+    },
+
+    plugins =
+    {
+        ["plugin.hello"] =
+        {
+            publisherId = "com.xedur",
+        },
+    },
+
+    win32 = {
+        singleInstance = true,
+    },
+
+    window =
+    {
+        titleText =
+        {
+            default = "Solar2D Hello - Sample",
+        },
+        defaultViewWidth = 960,
+        defaultViewHeight = 640,
+        minViewWidth = 480,
+        minViewHeight = 320,
+        defaultMode = "normal",
+        enableMaximizeButton = true,
+        enableMinimizeButton = true,
+        enableCloseButton = true,
+        resizable = true,
+    },
+}
