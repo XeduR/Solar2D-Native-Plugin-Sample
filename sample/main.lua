@@ -8,7 +8,22 @@
 display.setStatusBar( display.HiddenStatusBar )
 display.setDefault( "background", 20/255, 21/255, 24/255 )
 
-local hello = require( "plugin.hello" )
+-- This plugin sample is local only and not available in Solar2D's plugin directory or marketplaces.
+-- You must build it and place the output files in the correct locations before use (see BUILDING.md).
+local loaded, hello = pcall( require, "plugin.hello" )
+if not loaded then
+    local warning = display.newText({
+        text = "Failed to load plugin.\n\nPlease refer to BUILDING.md and README.md\nfor build and setup instructions.",
+        x = display.contentCenterX,
+        y = display.contentCenterY,
+        font = native.systemFontBold,
+        fontSize = 20,
+        align = "center",
+        width = display.contentWidth - 40,
+    })
+    warning:setFillColor( 1, 0.3, 0.3 )
+    return
+end
 
 -- Layout constants
 local centerX = display.contentCenterX
