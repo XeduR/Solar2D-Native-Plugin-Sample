@@ -60,8 +60,7 @@ elseif(APPLE)
     )
 
 elseif(UNIX)
-    # Linux: allow undefined Lua symbols (resolved at runtime by Solar2D host)
-    target_link_options(plugin_hello PRIVATE "-Wl,--allow-shlib-undefined")
+    # Linux: undefined Lua symbols are allowed by default for shared libraries; the Solar2D host resolves them at runtime
 
     # Output: plugin_hello.so
     set_target_properties(plugin_hello PROPERTIES

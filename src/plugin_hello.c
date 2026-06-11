@@ -13,10 +13,8 @@
 
 #include "lua.h"
 #include "lauxlib.h"
-#include "lualib.h"
 
 #include <time.h>
-#include <string.h>
 #include <stdio.h>
 
 /* Export macro for symbol visibility */
@@ -78,6 +76,8 @@ static const luaL_Reg kHelloFunctions[] =
 PLUGIN_EXPORT
 int luaopen_plugin_hello(lua_State *L)
 {
-    luaL_register(L, "plugin.hello", kHelloFunctions);
+    /* NULL name keeps the module out of _G; require() uses the returned table */
+    lua_newtable(L);
+    luaL_register(L, NULL, kHelloFunctions);
     return 1;
 }

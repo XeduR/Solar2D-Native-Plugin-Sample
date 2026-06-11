@@ -6,10 +6,13 @@
 
   Prerequisites:
     - Solar2D Native SDK installed (sets CORONA_ROOT environment variable)
-    - Visual Studio 2022 (or 2019 with v142 toolset)
+    - Visual Studio 2022 (or 2019: retarget PlatformToolset from v143 to v142)
 
   The CORONA_ROOT environment variable should point to:
     C:\Program Files (x86)\Corona Labs\Corona\Native
+
+  F5 debugging launches the Simulator via CORONA_PATH (set by the Solar2D installer
+  to the install folder containing Corona Simulator.exe).
 
   The built DLL is automatically copied to the Solar2D Simulator plugins directory.
 -->
@@ -90,7 +93,7 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(TargetPath)" "%APPDATA%\Corona Labs\Corona Simulator\Plugins\" /Y</Command>
+      <Command>xcopy "$(TargetPath)" "%APPDATA%\Corona Labs\Corona Simulator\Plugins" /Y /I</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <!--
@@ -117,7 +120,7 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(TargetPath)" "%APPDATA%\Corona Labs\Corona Simulator\Plugins\" /Y</Command>
+      <Command>xcopy "$(TargetPath)" "%APPDATA%\Corona Labs\Corona Simulator\Plugins" /Y /I</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <!--

@@ -42,7 +42,6 @@ $CC -shared -fPIC \
     -DNDEBUG \
     $INCLUDE_FLAGS \
     "$SRC_DIR/plugin_hello.c" \
-    -Wl,--allow-shlib-undefined \
     -o "$OUTPUT_FILE"
 
 echo "Built: $OUTPUT_FILE"

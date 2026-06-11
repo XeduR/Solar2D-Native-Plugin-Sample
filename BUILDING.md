@@ -72,7 +72,7 @@ Uses the official build toolchain bundled with Solar2D. Best for local developme
 #### Prerequisites
 
 - Solar2D installed (the installer sets the `CORONA_ROOT` environment variable)
-- **Windows**: Visual Studio 2022 (or 2019) with the "Desktop development with C++" workload
+- **Windows**: Visual Studio 2022 with the "Desktop development with C++" workload. VS2019 works too, but the project targets the v143 toolset, so retarget the solution to v142 first (right-click the solution > Retarget solution)
 - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
 - **Linux**: GCC
 - **iOS**: Xcode Command Line Tools (`xcode-select --install`)
@@ -102,6 +102,8 @@ build.bat Release
 ```
 
 The post-build step automatically copies `plugin_hello.dll` to the Simulator plugins directory.
+
+F5 debugging from Visual Studio launches the Corona Simulator via the `CORONA_PATH` environment variable, which the Solar2D installer sets to the install folder (e.g. `C:\Program Files (x86)\Corona Labs\Corona`).
 
 #### macOS
 
@@ -181,7 +183,7 @@ No Lua library needed. Symbols resolve at runtime via `-undefined dynamic_lookup
 
 ```bash
 mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release
 ```
 
@@ -189,20 +191,20 @@ Output: `build/plugin_hello.dylib`
 
 For a universal binary (x86_64 + arm64):
 ```bash
-cmake -B build-x64 -DCMAKE_OSX_ARCHITECTURES=x86_64
+cmake -B build-x64 -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_BUILD_TYPE=Release
 cmake --build build-x64 --config Release
-cmake -B build-arm64 -DCMAKE_OSX_ARCHITECTURES=arm64
+cmake -B build-arm64 -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release
 cmake --build build-arm64 --config Release
 lipo -create build-x64/plugin_hello.dylib build-arm64/plugin_hello.dylib -output plugin_hello.dylib
 ```
 
 #### Linux
 
-No Lua library needed. Symbols resolve at runtime via `--allow-shlib-undefined`.
+No Lua library needed. Undefined symbols are allowed by default when linking a Linux shared library; they resolve at runtime from the Solar2D host.
 
 ```bash
 mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release
 ```
 
@@ -219,7 +221,7 @@ Output: `build/plugin_hello.so`
 
 ### GitHub Actions
 
-The repository includes a CI workflow at `.github/workflows/build.yml` that builds the plugin for all platforms. It is triggered manually via `workflow_dispatch`.
+The repository includes a CI workflow at `.github/workflows/build.yml` that builds the plugin for all platforms. It runs manually via `workflow_dispatch` or automatically when a `v*` tag is pushed.
 
 #### What it does
 
@@ -263,7 +265,7 @@ git push origin v1.0.0
 
 #### Updating the Plugin Version
 
-The `PLUGIN_VERSION` environment variable at the top of the workflow controls the version directory name in the distribution structure. Update it when targeting a different Solar2D build number.
+The `PLUGIN_VERSION` value controls the version directory name in the distribution structure. Manual runs can set it via the `plugin_version` input on the workflow dispatch form; tag-triggered runs use the default defined at the top of the workflow. Update the default when targeting a different Solar2D build number.
 
 ---
 
@@ -275,7 +277,7 @@ The Solar2D Simulator loads plugins at runtime from a platform-specific director
 |----------|-------------|
 | Windows  | `%APPDATA%\Corona Labs\Corona Simulator\Plugins\plugin_hello.dll` |
 | macOS    | `~/Library/Application Support/Corona/Simulator/Plugins/plugin_hello.dylib` |
-| Linux    | `~/.local/share/Corona/Simulator/Plugins/plugin_hello.so` |
+| Linux    | `~/.Solar2D/Plugins/plugin_hello.so` |
 
 The Solar2D Native build scripts do this automatically. If you built with CMake or GitHub Actions, you need to copy the file manually.
 
@@ -294,8 +296,8 @@ The easiest approach. Download the `plugin-tarballs` artifact from a GitHub Acti
 | OS | Solar2DPlugins Path |
 |----|---------------------|
 | Windows | `%APPDATA%\Solar2DPlugins\` |
-| macOS | `~/Library/Application Support/Solar2DPlugins/` |
-| Linux | `~/.local/share/Solar2DPlugins/` |
+| macOS | `~/Solar2DPlugins/` |
+| Linux | `~/Solar2DPlugins/` |
 
 The artifact already contains the correct directory structure:
 
@@ -315,7 +317,19 @@ com.xedur/plugin.hello/
 
 If you built locally instead of using GitHub Actions, you need to create the tarballs yourself.
 
-Each platform needs a directory containing a plugin binary and a `metadata.lua`. The `metadata.lua` file tells Solar2D what kind of plugin it is. Desktop and Android native plugins use `format = "sharedLibrary"`, iOS plugins use `format = "staticLibrary"`, the JavaScript plugin uses `format = "js"` with a `jsFiles` list, and the Lua stub uses `format = "lua"`. See the `web/metadata.lua` and `lua/metadata.lua` files in this repository for examples.
+Each platform needs a directory containing a plugin binary and a `metadata.lua`. The `metadata.lua` file tells Solar2D what kind of plugin it is. Desktop and Android native plugins use `format = "sharedLibrary"`. iOS plugins use `format = "staticLibrary"` and must also list the library name in `staticLibs` (without the `lib` prefix, e.g. `staticLibs = { "plugin_hello" }`); without it, the iOS build never links the static library and `require` fails at runtime. The HTML5 plugin uses `format = "javascript"`; the HTML5 loader resolves the plugin purely by filename (`plugin_hello.js`), so the format string only matters on the packaging side. The Lua stub uses `format = "lua"`. See the `web/metadata.lua` and `lua/metadata.lua` files in this repository for examples.
+
+Android needs one extra level: the `.so` files must sit under `jniLibs/<abi>/` inside the tarball, next to `metadata.lua`. The Android app build only collects plugin native libraries from `jniLibs/` paths; bare `<abi>/` directories get mis-collected into a broken armeabi-v7a-only layout. The `android` directory should look like this before tarring:
+
+```
+android/
+  metadata.lua
+  jniLibs/
+    armeabi-v7a/libplugin_hello.so
+    arm64-v8a/libplugin_hello.so
+    x86/libplugin_hello.so
+    x86_64/libplugin_hello.so
+```
 
 For each platform directory, create a `data.tgz` tarball containing its files:
 

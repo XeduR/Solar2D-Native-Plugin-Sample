@@ -2,9 +2,16 @@ name: Build Plugin
 
 on:
   workflow_dispatch:
+    inputs:
+      plugin_version:
+        description: "Plugin version string used for distribution directory structure"
+        required: false
+        default: "2025.3726"
+  push:
+    tags: [ "v*" ]
 
 env:
-  PLUGIN_VERSION: "2025.3726"
+  PLUGIN_VERSION: ${{ inputs.plugin_version || '2025.3726' }}
 
 permissions:
   contents: write
@@ -14,10 +21,10 @@ jobs:
     name: Windows (x86)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up MSVC (x86)
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x86
 
@@ -38,7 +45,7 @@ jobs:
         run: ls -la build/Release/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: win32-sim
           path: build/Release/plugin_hello.dll
@@ -47,16 +54,16 @@ jobs:
     name: macOS (Universal)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure CMake (x86_64)
-        run: cmake -B build-x64 -DCMAKE_OSX_ARCHITECTURES=x86_64
+        run: cmake -B build-x64 -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_BUILD_TYPE=Release
 
       - name: Build (x86_64)
         run: cmake --build build-x64 --config Release
 
       - name: Configure CMake (arm64)
-        run: cmake -B build-arm64 -DCMAKE_OSX_ARCHITECTURES=arm64
+        run: cmake -B build-arm64 -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release
 
       - name: Build (arm64)
         run: cmake --build build-arm64 --config Release
@@ -70,7 +77,7 @@ jobs:
           lipo -info plugin_hello.dylib
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mac-sim
           path: plugin_hello.dylib
@@ -79,10 +86,10 @@ jobs:
     name: Linux (x86_64)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure CMake
-        run: cmake -B build
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --config Release
@@ -93,7 +100,7 @@ jobs:
           file build/plugin_hello.so
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux
           path: build/plugin_hello.so
@@ -102,7 +109,7 @@ jobs:
     name: iOS (device + simulator)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build iOS static libraries
         run: |
@@ -115,13 +122,13 @@ jobs:
           file build-ios/simulator/libplugin_hello.a
 
       - name: Upload device artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: iphone
           path: build-ios/device/libplugin_hello.a
 
       - name: Upload simulator artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: iphone-sim
           path: build-ios/simulator/libplugin_hello.a
@@ -130,7 +137,7 @@ jobs:
     name: Android (multi-ABI)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build Android shared libraries
         run: |
@@ -144,7 +151,7 @@ jobs:
           done
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: android
           path: build-android/*/libplugin_hello.so
@@ -154,10 +161,10 @@ jobs:
     needs: [build-windows, build-macos, build-linux, build-ios, build-android]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -186,8 +193,8 @@ jobs:
           cp artifacts/iphone/libplugin_hello.a "dist/plugins/${VERSION}/iphone/"
           cp artifacts/iphone-sim/libplugin_hello.a "dist/plugins/${VERSION}/iphone-sim/"
 
-          # Copy Android shared libraries (preserving ABI directory structure)
-          cp -r artifacts/android/* "dist/plugins/${VERSION}/android/"
+          # Copy Android shared libraries; the engine only collects plugin native libraries from jniLibs/<abi>/ paths
+          mkdir -p "dist/plugins/${VERSION}/android/jniLibs" && cp -r artifacts/android/* "dist/plugins/${VERSION}/android/jniLibs/"
 
           # Copy HTML5 JavaScript plugin (no build step; source files used directly)
           cp web/plugin_hello.js "dist/plugins/${VERSION}/web/"
@@ -220,6 +227,9 @@ jobs:
               plugin =
               {
                   format = "staticLibrary",
+                  staticLibs = { "plugin_hello" },
+                  frameworks = {},
+                  frameworksOptional = {},
               },
           }
           return metadata
@@ -265,13 +275,13 @@ jobs:
           ls -la dist/release/
 
       - name: Upload plugin distribution
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plugin-distribution
           path: dist/plugins/
 
       - name: Upload installable tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plugin-tarballs
           path: dist/install/

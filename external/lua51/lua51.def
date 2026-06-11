@@ -1,6 +1,6 @@
 ; lua51.def
 ; Lua 5.1 C API exports for generating an import library.
-; Used by CI to link against Solar2D's lua51.dll without the SDK.
+; Used by CI to link against Solar2D's lua.dll without the SDK.
 ;
 ; Usage: lib /def:lua51.def /out:lua51.lib /machine:x86
 
