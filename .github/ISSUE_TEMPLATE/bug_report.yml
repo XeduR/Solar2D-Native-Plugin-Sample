@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a failed build, a package that does not load, or other unexpected behaviour in the sample plugin or its build.
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen instead?
+      placeholder: e.g. An Android build of the sample cannot find plugin.hello; the Windows Simulator loads it.
+    validations:
+      required: true
+
+  - type: input
+    id: platforms
+    attributes:
+      label: Affected platforms
+      description: Every platform where you have seen the problem, and any where it does not happen.
+      placeholder: e.g. Android 14 (Pixel 7) and the Windows Simulator; macOS works
+
+  - type: input
+    id: solar2d-build
+    attributes:
+      label: Solar2D build
+      placeholder: e.g. 2025.3726
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps or code that shows the problem.
+      placeholder: |
+        e.g.
+        1. Run the Build Plugin workflow on a fork.
+        2. Extract the plugin-tarballs artifact into Solar2DPlugins.
+        3. Build the sample for Android and open it.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Console output, error messages, or stack traces.
+      placeholder: e.g. build-win32\build.log, the output of the failing workflow step, the Simulator console output, or adb logcat

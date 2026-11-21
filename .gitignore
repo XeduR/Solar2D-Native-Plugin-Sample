@@ -55,6 +55,9 @@ DerivedData/
 node_modules/
 .claude/
 
+# Local working files, at any depth
+.scratch/
+
 # Temporary and backup files
 *.tmp
 *.backup

@@ -68,6 +68,8 @@ Route A is the one the [directory README](https://github.com/solar2d/plugins.sol
 
 The push triggers that repository's own workflow, which packs every `plugins/<solar2dBuild>/<platform>/` folder into a `<solar2dBuild>-<platform>.tgz` asset, creates a release tagged `v<run number>`, and asks the directory to update your entry. You do not write the directory entry yourself on this route.
 
+After your first push, check that the new release holds the `<solar2dBuild>-<platform>.tgz` assets and that the plugin is listed on [plugins.solar2d.com](https://plugins.solar2d.com). The workflow run succeeds even when its request to the directory was skipped or refused, so a green run does not show that the entry exists. Entries already in the directory are also refreshed by a daily job.
+
 The release tag here is a counter, not your `pluginVersion`. A developer who pins your plugin to a version (see [Pinning a specific version](#pinning-a-specific-version)) uses that `v<run number>` tag.
 
 ## Route B: your own repository

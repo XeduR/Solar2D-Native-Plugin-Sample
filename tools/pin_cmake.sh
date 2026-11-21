@@ -6,7 +6,7 @@
 set -euo pipefail
 
 CMAKE_VERSION="4.4.3"
-# Pinned here so a replaced release asset cannot vouch for itself.
+# Pinned here so a replaced release asset cannot vouch for itself; a version bump also updates local_build.bat's version and zip hash.
 CMAKE_SHA256="d6c83076c575bc00b823522ac974bda66d0af05d6ddc30e739c12385cf32c6cc"
 
 if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then

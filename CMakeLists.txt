@@ -103,9 +103,12 @@ elseif(UNIX)
 endif()
 
 # Hide internal symbols so only luaopen_<plugin name> (marked with PLUGIN_EXPORT) stays visible.
+# The C++ and Objective-C presets take effect once project() enables those languages.
 if(NOT WIN32)
     set_target_properties(${PLUGIN_TARGET} PROPERTIES
         C_VISIBILITY_PRESET hidden
+        CXX_VISIBILITY_PRESET hidden
+        OBJC_VISIBILITY_PRESET hidden
     )
 endif()
 

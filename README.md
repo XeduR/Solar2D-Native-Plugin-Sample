@@ -28,6 +28,8 @@ To submit a finished plugin to the Solar2D Free Plugin Directory, see **[PUBLISH
 
 ## Usage
 
+`plugin.hello` is not in the Solar2D Free Plugin Directory, so the `build.settings` entry below does not install it by itself. Build and install the plugin locally first, as described in [BUILDING.md](BUILDING.md).
+
 Require the plugin in your Lua code:
 
 ```lua
@@ -86,14 +88,17 @@ web/                          HTML5 JavaScript plugin
 lua/                          Lua stub for unsupported platforms
 external/lua51/               Bundled Lua 5.1 headers
 local_build.bat               Windows local build (sets up CMake and MSVC if needed)
-tools/                        Metadata reader and the iOS, tvOS, and Android build scripts run by CI
+tools/                        Metadata reader, CMake pin, and the iOS, tvOS, and Android build scripts run by CI
+test/                         Test hook run by CI: loads the built plugin in Lua 5.1 and checks its API
 sample/                       Sample Solar2D project
 CMakeLists.txt                CMake build for every native platform
 .github/workflows/build.yml   CI/CD (GitHub Actions)
 ```
 
+## Author
+
+[© 2026 Eetu Rantanen](https://www.erantanen.com)
+
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
-Copyright (c) 2026 Eetu Rantanen
+[MIT](LICENSE)

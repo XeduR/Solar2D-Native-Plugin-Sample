@@ -1,9 +1,9 @@
 name: Build Plugin
 
-# Manual dispatch only. A build costs up to six runners, so it runs when a
-# build is actually wanted, not on every commit. A run builds the platforms
-# listed in metadata.json, packages them, and creates or updates the
-# v<pluginVersion> release.
+# Manual dispatch only. A build runs up to nine jobs, so it runs when a build
+# is actually wanted, not on every commit. A run builds the platforms listed
+# in metadata.json, runs the test hook, packages the results, and creates or
+# updates the v<pluginVersion> release.
 on:
   workflow_dispatch:
 
@@ -19,6 +19,10 @@ defaults:
   run:
     shell: bash
 
+env:
+  # cmake --build runs up to this many jobs at once; public-repo Linux and Windows runners have 4 CPUs.
+  CMAKE_BUILD_PARALLEL_LEVEL: "4"
+
 jobs:
   config:
     name: Read metadata
@@ -27,6 +31,7 @@ jobs:
     outputs:
       name_dotted: ${{ steps.meta.outputs.name_dotted }}
       name_underscored: ${{ steps.meta.outputs.name_underscored }}
+      has_tests: ${{ steps.meta.outputs.has_tests }}
       publisher_id: ${{ steps.meta.outputs.publisher_id }}
       plugin_version: ${{ steps.meta.outputs.plugin_version }}
       solar2d_build: ${{ steps.meta.outputs.solar2d_build }}
@@ -40,9 +45,18 @@ jobs:
           set -eo pipefail
           # Shared parser/validator; fails the step on invalid fields.
           . tools/read_metadata.sh
+
+          # The test job runs only when the repository carries a test hook.
+          if [ -f test/ci_test.sh ]; then
+            HAS_TESTS=true
+          else
+            HAS_TESTS=false
+          fi
+
           {
             echo "name_dotted=${PLUGIN_NAME_DOTTED}"
             echo "name_underscored=${PLUGIN_NAME_UNDERSCORED}"
+            echo "has_tests=${HAS_TESTS}"
             echo "publisher_id=${PUBLISHER_ID}"
             echo "plugin_version=${PLUGIN_VERSION}"
             echo "solar2d_build=${SOLAR2D_BUILD}"
@@ -355,9 +369,29 @@ jobs:
           path: build-android/*/lib${{ needs.config.outputs.name_underscored }}.so
           if-no-files-found: error
 
+  test:
+    name: Test
+    needs: config
+    if: needs.config.outputs.has_tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install test dependencies
+        run: |
+          set -eo pipefail
+          if [ -f test/ci_apt.txt ]; then
+            sudo apt-get update
+            xargs -a test/ci_apt.txt sudo apt-get install -y
+          fi
+
+      - name: Run the test hook
+        run: bash test/ci_test.sh
+
   package:
     name: Package Plugin Distribution
-    needs: [config, build-windows, build-macos, build-linux, build-ios, build-tvos, build-android]
+    needs: [config, build-windows, build-macos, build-linux, build-ios, build-tvos, build-android, test]
     # Skipped jobs must not skip packaging; failed or cancelled (timed-out) jobs are refused by the first step below.
     if: ${{ !cancelled() && needs.config.result == 'success' }}
     runs-on: ubuntu-latest
@@ -415,11 +449,13 @@ jobs:
           SRC_ESC="${SRC//./\\.}"
           SRC_DOTTED_ESC="${SRC_DOTTED//./\\.}"
 
-          # \b keeps the rules from matching inside longer identifiers (GNU sed).
-          # Values are sed-safe per the validator.
+          # Each rule matches the source name followed by a word boundary or an
+          # underscore, covering identifiers derived from it (plugin_hello_state)
+          # without touching longer names that merely start with it (underscore is
+          # a word character, so a trailing \b alone cannot). Values are sed-safe per the validator.
           rewrite() {
-            sed -e "s/\b${SRC_DOTTED_ESC}\b/${NAME_DOTTED}/g" \
-                -e "s/\b${SRC_ESC}\b/${NAME}/g" \
+            sed -e "s/\b${SRC_DOTTED_ESC}\(\b\|_\)/${NAME_DOTTED}\1/g" \
+                -e "s/\b${SRC_ESC}\(\b\|_\)/${NAME}\1/g" \
                 -e "s/\bcom\.xedur\b/${PUBLISHER}/g"
           }
 
@@ -553,7 +589,7 @@ jobs:
           find dist/install -type f | sort
 
           # <build>-<platform>.tgz is the release asset naming the Solar2D Free
-          # Plugins Directory expects.
+          # Plugin Directory expects.
           mkdir -p dist/release
           for platform in $DIST_PLATFORMS; do
             cp "${INSTALL_DIR}/${PUBLISHER}/${NAME_DOTTED}/${platform}/data.tgz" "dist/release/${BUILD}-${platform}.tgz"

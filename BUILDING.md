@@ -35,7 +35,7 @@ The build strategy is split by platform:
 - **Windows** is the only local build, via [`local_build.bat`](local_build.bat) in the project root. It builds the plugin DLL and installs it for both the Simulator and Windows app builds. See [Local Build (Windows)](#local-build-windows).
 - **Every other platform** (macOS, Linux, iOS, tvOS, Android) is built by [GitHub Actions](#ci-builds-github-actions), which is the source of all release binaries. Building them locally is not needed: there is no toolchain setup outside Windows, and no single machine can build every target anyway (each needs its own OS and SDKs).
 
-Every native build goes through the one [`CMakeLists.txt`](CMakeLists.txt), so its source list is the only place to add a new source file.
+Every native build goes through the one [`CMakeLists.txt`](CMakeLists.txt), so its source list is the only place to add a new source file. The project enables C only. To add a C++ or Objective-C file, also add its language to the `project()` line, for example `project(${PLUGIN_TARGET} C CXX)`; CMake leaves a file in a language that is not enabled out of the build without an error.
 
 Building produces a binary for each platform:
 
@@ -82,7 +82,7 @@ Everything that identifies the plugin lives in one file, [`metadata.json`](metad
 
 To turn this repo into your own plugin, edit `metadata.json` instead of hunting through the build files. Every build path reads it: CMake via `string(JSON ...)`, the CI workflow and the iOS, tvOS, and Android build scripts via `tools/read_metadata.sh`, and `local_build.bat` via PowerShell.
 
-The packaging steps also rewrite the plugin name and `publisherId` inside the `lua/` and `web/` files, so those files need no edits after a rename in `metadata.json`. The name to replace is taken from the fallback file's own name (`lua/plugin_hello.lua` gives `plugin_hello` and `plugin.hello`), and the publisher id replaced is `com.xedur`. For that to work, `lua/` must hold `metadata.lua` plus exactly one other Lua file, and `web/` a `.js` file with the same base name.
+The packaging steps also rewrite the plugin name and `publisherId` inside the `lua/` and `web/` files, so those files need no edits after a rename in `metadata.json`. The name to replace is taken from the fallback file's own name (`lua/plugin_hello.lua` gives `plugin_hello` and `plugin.hello`), and the publisher id replaced is `com.xedur`. An identifier that continues the name with an underscore (`plugin_hello_state`) is renamed with it. For that to work, `lua/` must hold `metadata.lua` plus exactly one other Lua file, and `web/` a `.js` file with the same base name.
 
 `tools/read_metadata.sh` validates the fields and fails the build on bad values:
 
@@ -153,7 +153,8 @@ The workflow at `.github/workflows/build.yml` builds the platforms listed under 
 4. **iOS.** Runs `tools/build_apple.sh ios`: `libplugin_hello.a` static libraries via CMake for device (arm64) and Simulator (arm64 + x86_64), deployment target iOS 15.0.
 5. **tvOS.** Runs `tools/build_apple.sh tvos`: the same two static libraries for Apple TV, deployment target tvOS 15.0.
 6. **Android.** Runs `tools/build_android.sh`: `libplugin_hello.so` for all ABIs (armeabi-v7a, arm64-v8a, x86, x86_64) at API level 21, using the CMake toolchain of the Android NDK, which is preinstalled on the GitHub runners. The libraries are linked with `-Wl,-z,max-page-size=16384` so they are 16 KB page-aligned: Android 15+ runs on devices with 16 KB memory pages and rejects 4 KB-aligned libraries, and only NDK r28+ aligns by default.
-7. **Package.** Assembles the full plugin distribution:
+7. **Test.** Runs `test/ci_test.sh` on Linux: it builds the plugin for the runner, loads the library in stock Lua 5.1 through `require( "plugin.hello" )`, and checks what `getGreeting()` returns. The apt packages listed in `test/ci_apt.txt` are installed first. The job is skipped when the repository has no `test/ci_test.sh`.
+8. **Package.** Runs only when every build job and the test job passed. Assembles the full plugin distribution:
    - Copies the compiled binaries from steps 1-6 into the layout each platform's app build expects (see [Manual setup from local builds](#manual-setup-from-local-builds)).
    - Copies the HTML5 JavaScript plugin from `web/plugin_hello.js` and its `web/metadata.lua`.
    - Copies the Lua fallback stub from `lua/plugin_hello.lua` and its `lua/metadata.lua`.
@@ -167,12 +168,12 @@ Every build job ends by checking what it built, and a failed check stops the run
 - Every platform: the exported `luaopen_plugin_hello` symbol.
 - macOS, iOS, tvOS: the expected architectures and the minimum OS version stamped into the binary.
 - macOS: the library links only libraries that macOS itself ships.
-- Linux: no glibc symbol version newer than 2.31, and no linked library beyond the C/C++ runtime and X11.
-- Android: every LOAD segment is 16 KB-aligned.
+- Linux: no glibc, libstdc++, or C++ ABI symbol version newer than Ubuntu 20.04 provides (glibc 2.31), and no linked library beyond the C/C++ runtime and X11.
+- Android: every LOAD segment is 16 KB-aligned, and the library does not depend on `libc++_shared.so`.
 
 The Apple jobs run on the `macos-15` runner. Its default Xcode 16.4 still accepts macOS 10.13 as a deployment target, while Xcode 26 starts at macOS 11 ([Xcode support matrix](https://developer.apple.com/support/xcode/)).
 
-The same scripts run outside CI on a matching machine, with CMake 3.19+ and `python3` installed: `bash tools/build_apple.sh <ios|tvos> [output dir]` on macOS with Xcode, `bash tools/build_android.sh [output dir]` with `ANDROID_NDK_HOME` set, and `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release` for the desktop library.
+The same scripts run outside CI on a matching machine, with CMake 3.19+ and `python3` installed: `bash tools/build_apple.sh <ios|tvos> [output dir]` on macOS with Xcode, `bash tools/build_android.sh [output dir]` with `ANDROID_NDK_HOME` set, and `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release` for the desktop library. `bash test/ci_test.sh` runs the test on Linux with `lua5.1` installed.
 
 CMake 4.4.3 is pinned in two files, each with its own download hash: `local_build.bat` and `tools/pin_cmake.sh`. Update both when you move to a newer CMake.
 
