@@ -2,41 +2,41 @@
 
 A beginner-friendly sample project demonstrating how to build a native [Solar2D](https://solar2d.com/) plugin from scratch.
 
-This plugin has a single function, `hello.getGreeting()`, that returns a greeting string including the platform name and the current time. It is intentionally minimal so that the project structure, build configuration, and platform integration are easy to follow without the complexity of a real-world plugin.
+This plugin has a single function, `getGreeting()`, that returns a greeting string including the platform name and the current time. It is intentionally minimal so that the project structure, build configuration, and platform integration are easy to follow without the complexity of a real-world plugin.
 
-If you are looking for a more complete example of a real-world plugin, see [Solar2D Cursor](https://github.com/XeduR/Solar2D-Cursor), which is built based on this sample project.
+For real-world plugins that use the same build system, see [Solar2D Plugins](https://github.com/XeduR/Solar2D-Plugins).
 
-| Platform | Status | Implementation |
-|----------|--------|----------------|
-| Windows  | Full   | C (MSVC)       |
-| macOS    | Full   | C (Clang)      |
-| Linux    | Full   | C (GCC)        |
-| iOS      | Full   | C (Clang)      |
-| tvOS     | Full   | C (Clang)      |
-| Android  | Full   | C (NDK)        |
-| HTML5    | Full   | JavaScript     |
+## Features
 
-Solar2D also runs on Nintendo Switch, but building plugins for it requires the NDA-gated Nintendo SDK, so this sample does not cover it.
+- One C source file builds for Windows, macOS, Linux, iOS, tvOS, and Android through a single `CMakeLists.txt`.
+- A JavaScript implementation covers HTML5, and a Lua fallback covers platforms without a native build.
+- `metadata.json` holds the plugin name, publisher id, versions, and platform list, and every build path reads it.
+- `local_build.bat` builds the plugin on Windows and installs it for the Simulator and for Windows app builds.
+- A GitHub Actions workflow builds each platform, checks each binary, runs a Lua test of the plugin, packages the results as `data.tgz` tarballs, and creates a GitHub Release.
 
-## Getting Started
+## Platform Support
 
-On Windows, run [`local_build.bat`](local_build.bat) to build the plugin and install it for both the Simulator and Windows app builds. All other platforms are built by GitHub Actions. For details, installation, and plugin distribution setup, see **[BUILDING.md](BUILDING.md)**.
+| Platform | Status |
+| --- | --- |
+| Windows | Supported |
+| macOS | Supported |
+| Linux | Supported |
+| iOS | Supported |
+| tvOS | Supported |
+| Android | Supported |
+| HTML5 | Supported through a separate JavaScript implementation |
+| Nintendo Switch | Not supported. Building plugins for Switch needs the NDA-gated Nintendo SDK. |
 
-To adapt this sample into your own plugin, edit [`metadata.json`](metadata.json) (plugin name, publisher id, versions, and platforms); every build path reads it, so you do not rename files or touch the build scripts. The sample project in [`sample/`](sample/) declares the default identity, so update it too if you rename the plugin. See [Configuring the Plugin](BUILDING.md#configuring-the-plugin).
+## Installation
 
-To submit a finished plugin to the Solar2D Free Plugin Directory, see **[PUBLISHING.md](PUBLISHING.md)**.
+`plugin.hello` is not in the Solar2D Free Plugin Directory, so adding it to `build.settings` does not install it. Build and install it yourself first:
 
-## Usage
+- On Windows, run [`local_build.bat`](local_build.bat). It builds the plugin and installs it for the Simulator and for Windows app builds.
+- For any other platform, run the `Build Plugin` workflow from the Actions tab of your fork and install its `plugin-tarballs` artifact.
 
-`plugin.hello` is not in the Solar2D Free Plugin Directory, so the `build.settings` entry below does not install it by itself. Build and install the plugin locally first, as described in [BUILDING.md](BUILDING.md).
+[BUILDING.md](BUILDING.md) covers both, along with self-hosted distribution.
 
-Require the plugin in your Lua code:
-
-```lua
-local hello = require( "plugin.hello" )
-```
-
-Add the plugin to your `build.settings`:
+Then add the plugin to `build.settings`:
 
 ```lua
 settings =
@@ -51,49 +51,24 @@ settings =
 }
 ```
 
-## API
-
-### hello.getGreeting()
-
-Returns a greeting string that includes the platform name and the current local time.
-
-```lua
-local message = hello.getGreeting()
-print( message )
--- "Hello from Windows! The time is currently 14:30:45."
-```
-
-**Returns**: A string in the format `"Hello from <platform>! The time is currently HH:MM:SS."`
-
-Platform names: Windows, macOS, Linux, iOS, tvOS, Android, HTML5. The Lua fallback stub returns an availability notice instead of the timed greeting.
-
-## Example
+## Usage
 
 ```lua
 local hello = require( "plugin.hello" )
 
-local greeting = hello.getGreeting()
-print( greeting )
+print( hello.getGreeting() )
+-- Hello from Windows! The time is currently 14:30:45.
 ```
 
-A sample project is in the [`sample/`](sample/) directory.
+`getGreeting()` returns a string in the format `Hello from <platform>! The time is currently HH:MM:SS.`, using the local time. On a platform without a native build, the Lua fallback returns a notice that the native plugin is not available.
 
-## Project Structure
+To see the plugin run, open the project in [`sample/`](sample/) in the Simulator after installing the plugin. See [Testing with the Sample Project](BUILDING.md#testing-with-the-sample-project).
 
-```
-metadata.json                 Single source of truth: plugin name, publisher, versions, platforms
-src/                          Native C source code
-  plugin_hello.c               Single source file for all native platforms
-web/                          HTML5 JavaScript plugin
-lua/                          Lua stub for unsupported platforms
-external/lua51/               Bundled Lua 5.1 headers
-local_build.bat               Windows local build (sets up CMake and MSVC if needed)
-tools/                        Metadata reader, CMake pin, and the iOS, tvOS, and Android build scripts run by CI
-test/                         Test hook run by CI: loads the built plugin in Lua 5.1 and checks its API
-sample/                       Sample Solar2D project
-CMakeLists.txt                CMake build for every native platform
-.github/workflows/build.yml   CI/CD (GitHub Actions)
-```
+## Making Your Own Plugin
+
+To turn the sample into your own plugin, edit [`metadata.json`](metadata.json): plugin name, publisher id, versions, and platforms. Every build path reads it, so you do not rename files or edit the build scripts. The sample project in [`sample/`](sample/) declares the default identity, so update it too if you rename the plugin. See [Configuring the Plugin](BUILDING.md#configuring-the-plugin).
+
+To submit a finished plugin to the Solar2D Free Plugin Directory, see [PUBLISHING.md](PUBLISHING.md).
 
 ## Author
 
@@ -102,3 +77,7 @@ CMakeLists.txt                CMake build for every native platform
 ## License
 
 [MIT](LICENSE)
+
+Bundled third-party code:
+
+- Lua 5.1 headers: MIT

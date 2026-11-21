@@ -1,8 +1,8 @@
 # Publishing to the Solar2D Free Plugin Directory
 
-This guide covers submitting a finished plugin to the [Solar2D Free Plugin Directory](https://plugins.solar2d.com/), the catalog the Solar2D build server checks when a developer requires a plugin they have not installed locally. It is the free, open-source distribution channel maintained at [github.com/solar2d/plugins.solar2d.com](https://github.com/solar2d/plugins.solar2d.com).
+The [Solar2D Free Plugin Directory](https://plugins.solar2d.com/) is the catalog the Solar2D build server checks when a developer requires a plugin they have not installed locally. It is the free, open-source distribution channel maintained at [github.com/solar2d/plugins.solar2d.com](https://github.com/solar2d/plugins.solar2d.com).
 
-If you would rather sell or gate your plugin, submit it to the commercial [Solar2D Plugins Marketplace](https://www.solar2dplugins.com/) instead; that has its own [asset packaging guidelines](https://www.solar2dplugins.com/asset-packaging-guidelines) and is out of scope here.
+If you would rather sell or gate your plugin, submit it to the commercial [Solar2D Plugins Marketplace](https://www.solar2dplugins.com/) instead, which has its own [asset packaging guidelines](https://www.solar2dplugins.com/asset-packaging-guidelines).
 
 For building the binaries this guide assumes you have, see [BUILDING.md](BUILDING.md).
 
@@ -46,14 +46,14 @@ Two consequences follow from that URL, and both are hard requirements:
 - A `publisherId` you control. Reverse-domain form is the convention (`com.yourname`), and it must match the `publisherId` you set in `metadata.json` and that users will put in their `build.settings`.
 - A finished build of the plugin from the `Build Plugin` workflow, so you have its `plugin-distribution` artifact and its GitHub Release.
 
-At minimum you must ship a Lua stub for every platform you do not implement natively, so that developers can call your API on any target. This template already builds a `lua` fallback tarball for that purpose.
+At minimum you must ship a Lua stub for every platform you do not implement natively, so that developers can call your API on any target. This sample already builds a `lua` fallback tarball for that purpose.
 
 ## Two ways to host the binaries
 
 | | Route A | Route B |
 |---|---|---|
 | Repository with the releases | `solar2d/<publisherId>-<pluginName>`, created for you | `<your account>/<publisherId>-<pluginName>`, created by you |
-| How a release is made | You push the built `plugins/` tree; that repository's own workflow creates the release | This template's `Build Plugin` workflow creates the release |
+| How a release is made | You push the built `plugins/` tree; that repository's own workflow creates the release | This sample's `Build Plugin` workflow creates the release |
 | Release tag | `v<run number>`, counted by that repository | `v<pluginVersion>` from `metadata.json` |
 | Directory entry | Written and updated automatically | You add it with a pull request |
 
@@ -79,11 +79,11 @@ The release tag here is a counter, not your `pluginVersion`. A developer who pin
 3. Confirm a tarball is reachable. With a browser or `curl`, the URL pattern above should download the file. If it 404s, the directory will fail to fetch your plugin for users.
 4. Add your entry to the directory with a pull request, as described in the next section.
 
-If you build by hand, create the per-platform `data.tgz` tarballs as described in [BUILDING.md](BUILDING.md#manual-setup-from-local-builds), rename each to `<solar2dBuild>-<platform>.tgz`, and attach them all to a single GitHub Release. The release tag is your plugin version (for example `v1.0.0`); the build number lives in the asset names, not the tag.
+If you build by hand, create the per-platform `data.tgz` tarballs as described in [BUILDING.md](BUILDING.md#manual-setup-from-local-builds), rename each to `<solar2dBuild>-<platform>.tgz`, and attach them all to a single GitHub Release. The release tag is your plugin version (for example `v1.0.0`); the build number is in the asset names, not the tag.
 
 ## The directory entry
 
-Your entry is a single JSON file at `plugins/<publisherId>_<pluginName>.json` (note the underscore separating publisher and name in the file name, while the repository name uses a hyphen). For this sample that file would be `plugins/com.xedur_plugin.hello.json`.
+Your entry is a single JSON file at `plugins/<publisherId>_<pluginName>.json`. The file name joins publisher and name with an underscore, while the repository name joins them with a hyphen. For this sample that file would be `plugins/com.xedur_plugin.hello.json`.
 
 On route A the directory writes this file for you from the latest release. On route B you add it yourself. Its shape is:
 
@@ -120,7 +120,7 @@ On route A the directory writes this file for you from the latest release. On ro
 | `latest` | The release tag the build server downloads from: `v<run number>` on route A, `v<pluginVersion>` (e.g. `v1.0.0`) on route B. |
 | `supported` | A map of Solar2D build number to the list of platforms you ship for that build. The keys must be `YYYY.NNNN`. |
 
-The platform names match the per-platform folders this template produces: `win32-sim`, `win32`, `mac-sim`, `macos`, `linux`, `iphone`, `iphone-sim`, `appletvos`, `appletvsimulator`, `android`, `web`, and the universal `lua` fallback. A plugin whose `platforms` list in `metadata.json` is shorter produces fewer of them.
+The platform names match the per-platform folders this sample produces: `win32-sim`, `win32`, `mac-sim`, `macos`, `linux`, `iphone`, `iphone-sim`, `appletvos`, `appletvsimulator`, `android`, `web`, and the universal `lua` fallback. A plugin whose `platforms` list in `metadata.json` is shorter produces fewer of them.
 
 ## Version targeting
 
