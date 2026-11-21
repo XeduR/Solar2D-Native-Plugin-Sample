@@ -1,0 +1,8 @@
+{
+    "publisherId": "com.xedur",
+    "pluginName": "plugin.hello",
+    "pluginVersion": "1.0.0",
+    "solar2dBuild": "2025.3726",
+    "platforms": ["windows", "macos", "linux", "ios", "tvos", "android"],
+    "url": "https://github.com/XeduR/Solar2D-Native-Plugin-Sample"
+}

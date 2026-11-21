@@ -1,17 +1,16 @@
 # Building and Installing
 
-This guide covers how to build the plugin from source, where to place the built files, and how to set up plugin distribution so that Solar2D can find the plugin when building your apps.
+This guide covers how the plugin is built, where the built files go, and how to set up plugin distribution so that Solar2D can find the plugin when building your apps.
 
-If you are new to Solar2D plugin development, start with the [Overview](#overview) section to understand how the pieces fit together, then follow the steps relevant to your platform.
+If you are new to Solar2D plugin development, start with the [Overview](#overview) section to understand how the pieces fit together.
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Configuring the Plugin](#configuring-the-plugin)
 - [Naming Convention](#naming-convention)
-- [Building the Plugin](#building-the-plugin)
-  - [Solar2D Native](#solar2d-native)
-  - [CMake](#cmake)
-  - [GitHub Actions](#github-actions)
+- [Local Build (Windows)](#local-build-windows)
+- [CI Builds (GitHub Actions)](#ci-builds-github-actions)
 - [Installing for the Simulator](#installing-for-the-simulator)
 - [Installing for App Builds](#installing-for-app-builds)
 - [Self-Hosted Distribution](#self-hosted-distribution)
@@ -21,7 +20,7 @@ If you are new to Solar2D plugin development, start with the [Overview](#overvie
 
 ## Overview
 
-A Solar2D native plugin is a shared library (`.dll`, `.dylib`, or `.so`) that exposes a `luaopen_<module>` function. When Lua calls `require("plugin.hello")`, Solar2D loads the shared library and calls `luaopen_plugin_hello()`, which registers the plugin's functions.
+A Solar2D native plugin is a library that exposes a `luaopen_<module>` function. On desktop platforms and Android it is a shared library (`.dll`, `.dylib`, or `.so`) loaded at runtime; on iOS and tvOS it is a static library (`.a`) linked into the app. When Lua calls `require("plugin.hello")`, Solar2D calls `luaopen_plugin_hello()`, which registers the plugin's functions.
 
 There are two contexts where Solar2D needs to find your plugin:
 
@@ -31,213 +30,153 @@ There are two contexts where Solar2D needs to find your plugin:
 
 You need to set up both if you want to test in the Simulator and also build standalone apps.
 
-There are three ways to build the native plugin:
+The build strategy is split by platform:
 
-| Method | Requires Solar2D SDK | CI/CD ready | Auto-installs to Simulator |
-|--------|---------------------|-------------|---------------------------|
-| [Solar2D Native](#solar2d-native) | Yes | No | Yes |
-| [CMake](#cmake) | No | Yes | No |
-| [GitHub Actions](#github-actions) | No | Yes | No |
+- **Windows** is the only local build, via [`local_build.bat`](local_build.bat) in the project root. It builds the plugin DLL and installs it for both the Simulator and Windows app builds. See [Local Build (Windows)](#local-build-windows).
+- **Every other platform** (macOS, Linux, iOS, tvOS, Android) is built by [GitHub Actions](#ci-builds-github-actions), which is the source of all release binaries. Building them locally is not needed: there is no toolchain setup outside Windows, and no single machine can build every target anyway (each needs its own OS and SDKs).
+
+Every native build goes through the one [`CMakeLists.txt`](CMakeLists.txt), so its source list is the only place to add a new source file.
 
 Building produces a binary for each platform:
 
 | Platform | Output File |
 |----------|-------------|
 | Windows  | `plugin_hello.dll` |
-| macOS    | `plugin_hello.dylib` |
+| macOS    | `plugin_hello.dylib` (universal) |
 | Linux    | `plugin_hello.so` |
-| iOS      | `libplugin_hello.a` (static library) |
+| iOS      | `libplugin_hello.a` (static library, device and simulator) |
+| tvOS     | `libplugin_hello.a` (static library, device and simulator) |
 | Android  | `libplugin_hello.so` (per ABI) |
 
 The HTML5 platform uses a pure JavaScript file (`web/plugin_hello.js`) instead of a compiled binary, so no build step is needed for it.
 
 The `lua/` directory contains a Lua stub (`plugin_hello.lua`) that acts as a fallback on platforms where the native plugin is not available. It returns a valid module with a stub `getGreeting()` function. No build step is needed for this either.
 
+Solar2D also runs on Nintendo Switch, but building plugins for it requires the NDA-gated Nintendo SDK, so this sample does not cover it.
+
+---
+
+## Configuring the Plugin
+
+Everything that identifies the plugin lives in one file, [`metadata.json`](metadata.json):
+
+```json
+{
+    "publisherId": "com.xedur",
+    "pluginName": "plugin.hello",
+    "pluginVersion": "1.0.0",
+    "solar2dBuild": "2025.3726",
+    "platforms": ["windows", "macos", "linux", "ios", "tvos", "android"],
+    "url": "https://github.com/XeduR/Solar2D-Native-Plugin-Sample"
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `publisherId` | Reverse-domain publisher id. Must match the `publisherId` in your `build.settings`. |
+| `pluginName` | The Lua module name, e.g. `plugin.hello`. The binary name and the `luaopen_` entry point are derived from it by replacing dots with underscores (`plugin_hello`). |
+| `pluginVersion` | Your plugin's own version. Used as the GitHub Release tag (`v1.0.0`). |
+| `solar2dBuild` | The minimum Solar2D build number your binaries target. Used as the distribution version directory and the release asset prefix. See [Updating the Plugin Version](#updating-the-plugin-version). |
+| `platforms` | Which native builds the CI workflow runs: any of `windows`, `macos`, `linux`, `ios`, `tvos`, `android`. Remove a platform your plugin does not support and its build job is skipped. The `web` and `lua` packages are made regardless. |
+| `url` | Your plugin's home page or repository. |
+
+To turn this repo into your own plugin, edit `metadata.json` instead of hunting through the build files. Every build path reads it: CMake via `string(JSON ...)`, the CI workflow and the iOS, tvOS, and Android build scripts via `tools/read_metadata.sh`, and `local_build.bat` via PowerShell.
+
+The packaging steps also rewrite the plugin name and `publisherId` inside the `lua/` and `web/` files, so those files need no edits after a rename in `metadata.json`. The name to replace is taken from the fallback file's own name (`lua/plugin_hello.lua` gives `plugin_hello` and `plugin.hello`), and the publisher id replaced is `com.xedur`. For that to work, `lua/` must hold `metadata.lua` plus exactly one other Lua file, and `web/` a `.js` file with the same base name.
+
+`tools/read_metadata.sh` validates the fields and fails the build on bad values:
+
+- `pluginName` must be `plugin.` followed by one identifier of letters, digits, and underscores that starts with a letter. Hyphens and further dots are not allowed: the `luaopen_` entry point must be a valid C identifier, and the packaging steps rebuild the dotted name from the first underscore of the file name.
+- `publisherId` must be dot-separated segments of letters, digits, and underscores. Hyphens are not allowed, because the [plugin directory](PUBLISHING.md) splits your release repository name on its first hyphen.
+- `solar2dBuild` must be a build number in `YYYY.NNNN` form.
+- `platforms` must be a non-empty list of the tokens above, each at most once.
+
+The sample project declares the plugin by its default identity; if you rename the plugin, also update `sample/build.settings` and `sample/main.lua`.
+
 ---
 
 ## Naming Convention
 
-Solar2D plugins follow a specific naming convention. The Lua module name uses dots (`plugin.hello`) but the binary filename uses underscores (`plugin_hello.dll`). This matches how Lua's `require` resolves C module names: `require("plugin.hello")` looks for `luaopen_plugin_hello` in a file named `plugin_hello.dll` (or `.dylib`/`.so`).
+Solar2D plugins follow a specific naming convention. The Lua module name uses dots (`plugin.hello`) but the binary filename uses underscores (`plugin_hello.dll`). This matches how Lua's `require` resolves C module names: `require("plugin.hello")` looks for `luaopen_plugin_hello`. On Windows, on macOS, and in every Simulator, Solar2D retries a failed `plugin.*` require with the dots replaced by underscores, which is how a file named `plugin_hello.dll` (or `.dylib`/`.so`) is found.
 
-All output files must use underscores, not dots. If you are adapting this repo for your own plugin, make sure the output name in `CMakeLists.txt`, `Plugin.vcxproj`, and the build scripts all use underscores.
+The conversion is automatic. The build derives the binary name and the `luaopen_` entry point from `pluginName` in [`metadata.json`](metadata.json), so you do not edit `CMakeLists.txt` or the build scripts when you rename the plugin.
 
----
-
-## Building the Plugin
-
-### Solar2D Native
-
-Uses the official build toolchain bundled with Solar2D. Best for local development since it builds the plugin and copies it directly into the Simulator's plugin directory.
-
-#### Prerequisites
-
-- Solar2D installed (the installer sets the `CORONA_ROOT` environment variable)
-- **Windows**: Visual Studio 2022 with the "Desktop development with C++" workload. VS2019 works too, but the project targets the v143 toolset, so retarget the solution to v142 first (right-click the solution > Retarget solution)
-- **macOS**: Xcode Command Line Tools (`xcode-select --install`)
-- **Linux**: GCC
-- **iOS**: Xcode Command Line Tools (`xcode-select --install`)
-- **Android**: Android NDK (set `ANDROID_NDK_HOME` environment variable)
-
-Verify `CORONA_ROOT` is set:
-```bash
-# Windows (cmd)
-echo %CORONA_ROOT%
-# Should print something like: C:\Program Files (x86)\Corona Labs\Corona\Native
-
-# macOS / Linux
-echo $CORONA_ROOT
-```
-
-#### Windows
-
-**Visual Studio:**
-1. Open `solar2d-native/win32/Plugin.sln`
-2. Select **Release | Win32**
-3. Build (Ctrl+Shift+B)
-
-**Command line:**
-```cmd
-cd solar2d-native\win32
-build.bat Release
-```
-
-The post-build step automatically copies `plugin_hello.dll` to the Simulator plugins directory.
-
-F5 debugging from Visual Studio launches the Corona Simulator via the `CORONA_PATH` environment variable, which the Solar2D installer sets to the install folder (e.g. `C:\Program Files (x86)\Corona Labs\Corona`).
-
-#### macOS
-
-```bash
-cd solar2d-native/mac
-./build.sh
-```
-
-Builds a universal binary (x86_64 + arm64) and copies `plugin_hello.dylib` to the Simulator plugins directory.
-
-#### Linux
-
-```bash
-cd solar2d-native/linux
-./build.sh
-```
-
-Output: `plugin_hello.so` in the current directory.
-
-#### iOS
-
-```bash
-cd solar2d-native/ios
-./build.sh
-```
-
-Builds static libraries for iOS device (arm64) and iOS Simulator (arm64 + x86_64). Output is in `device/` and `simulator/` subdirectories.
-
-#### Android
-
-```bash
-cd solar2d-native/android
-./build.sh
-```
-
-Builds shared libraries for all Android ABIs (armeabi-v7a, arm64-v8a, x86, x86_64). Requires the Android NDK. Output is in per-ABI subdirectories.
+Android and Linux apps have no such retry: they look the library up by the exact `require` name, dots included. The packaging step therefore ships those two binaries as `libplugin.hello.so` (Android) and `plugin.hello.so` (Linux). The `luaopen_plugin_hello` function inside them is unchanged. The same rule puts the Lua fallback at `plugin/hello.lua` inside its package. See [Manual setup from local builds](#manual-setup-from-local-builds) for the full layouts.
 
 ---
 
-### CMake
+## Local Build (Windows)
 
-Standalone build using CMake. Does not require the Solar2D SDK. Uses the bundled Lua 5.1 headers in `external/lua51/`. Lua symbols are resolved at runtime by the Solar2D host application, so you do not need a full Lua installation.
-
-#### Prerequisites
-
-- CMake 3.10+
-- C compiler (MSVC, GCC, or Clang)
-
-#### Windows
-
-On Windows, the plugin must link against a Lua 5.1 import library. The repo includes a `.def` file to generate one without needing full Lua sources:
+The only local build is on Windows:
 
 ```cmd
-:: From a Visual Studio Developer Command Prompt
+local_build.bat
+```
+
+What it does:
+
+1. Reads the plugin name and publisher from `metadata.json`.
+2. Finds Visual Studio through `vswhere` and initialises its MSVC x86 environment via `vcvarsall`. It picks the newest installation that has the C++ tools.
+3. Picks a CMake. One already on your PATH is used when it can generate for that Visual Studio (3.21 or newer, or 4.2 or newer for Visual Studio 2026). Otherwise the script offers to download a pinned, SHA-256-verified portable copy (CMake 4.4.3) into `.tools/`, used only for this build and not installed system-wide.
+4. Generates the Lua 5.1 import library from `external/lua51/lua51.def`. Solar2D's Windows runtime ships its Lua as `lua.dll`, which is what the `.def` file targets.
+5. Builds the plugin DLL (x86) with CMake into `build-win32/`. Solar2D's Windows Simulator and Windows apps are 32-bit, so the plugin must be too.
+6. Copies the DLL to the Simulator plugins directory (`%APPDATA%\Corona Labs\Corona Simulator\Plugins`), when Solar2D is installed.
+7. Packages and installs `data.tgz` plugins under `%APPDATA%\Solar2DPlugins\com.xedur\plugin.hello\` for the `win32` (Windows app build), `win32-sim` (Simulator), and `lua` (fallback stub) platforms, so Windows app builds resolve the plugin too.
+
+Prerequisites: Visual Studio 2019, 2022, or 2026 with the "Desktop development with C++" workload, and Windows 10 1803 or newer (for the bundled `curl` and `tar`). The build log is written to `build-win32\build.log`.
+
+Close the Simulator before running the script. A plugin DLL the Simulator has loaded cannot be overwritten, so step 6 fails and the script ends with the warning `plugin install copy failed - close the Corona Simulator and re-run.`
+
+To build manually instead, from a Developer Command Prompt at the project root:
+
+```cmd
 lib /def:external\lua51\lua51.def /out:external\lua51\lua51.lib /machine:x86
-
-mkdir build && cd build
-cmake .. -A Win32 -DLUA_LIBRARY=../external/lua51/lua51.lib
-cmake --build . --config Release
+cmake -B build-win32 -A Win32 -DLUA_LIBRARY="%CD%\external\lua51\lua51.lib"
+cmake --build build-win32 --config Release
 ```
 
-Alternatively, if you have the Solar2D Native SDK installed, you can point CMake at its Lua library:
+Output: `build-win32\Release\plugin_hello.dll`
 
-```cmd
-mkdir build && cd build
-cmake .. -A Win32 ^
-  -DLUA_INCLUDE_DIR="%CORONA_ROOT%\Corona\shared\include\lua" ^
-  -DLUA_LIBRARY="%CORONA_ROOT%\Corona\win\lib\lua.lib"
-cmake --build . --config Release
-```
-
-Output: `build/Release/plugin_hello.dll`
-
-#### macOS
-
-No Lua library needed. Symbols resolve at runtime via `-undefined dynamic_lookup`.
-
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-```
-
-Output: `build/plugin_hello.dylib`
-
-For a universal binary (x86_64 + arm64):
-```bash
-cmake -B build-x64 -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_BUILD_TYPE=Release
-cmake --build build-x64 --config Release
-cmake -B build-arm64 -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release
-cmake --build build-arm64 --config Release
-lipo -create build-x64/plugin_hello.dylib build-arm64/plugin_hello.dylib -output plugin_hello.dylib
-```
-
-#### Linux
-
-No Lua library needed. Undefined symbols are allowed by default when linking a Linux shared library; they resolve at runtime from the Solar2D host.
-
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-```
-
-Output: `build/plugin_hello.so`
-
-#### CMake Options
-
-| Variable | Type | Description |
-|----------|------|-------------|
-| `LUA_INCLUDE_DIR` | PATH | Path to Lua 5.1 headers (default: `external/lua51/`) |
-| `LUA_LIBRARY` | FILEPATH | Path to Lua 5.1 `.lib` file (Windows only) |
+CMake 3.19+ is required (the build reads `metadata.json` via `string(JSON ...)`, which was added in CMake 3.19). Generating for Visual Studio 2022 needs CMake 3.21 or newer, and for Visual Studio 2026 CMake 4.2 or newer. The CMake options are `LUA_INCLUDE_DIR` (path to Lua 5.1 headers; defaults to the bundled `external/lua51/`) and `LUA_LIBRARY` (the Lua import library to link, Windows only).
 
 ---
 
-### GitHub Actions
+## CI Builds (GitHub Actions)
 
-The repository includes a CI workflow at `.github/workflows/build.yml` that builds the plugin for all platforms. It runs manually via `workflow_dispatch` or automatically when a `v*` tag is pushed.
+The workflow at `.github/workflows/build.yml` builds the platforms listed under `platforms` in `metadata.json` and packages the full plugin distribution. It runs manually via `workflow_dispatch`; nothing is triggered by a push. There are no inputs: a `config` job reads and validates `metadata.json` through `tools/read_metadata.sh` and feeds the plugin name, publisher, version, Solar2D build, and platform list to every other job. A run started while another is still going waits for it to finish, and starting one more replaces the run that was waiting.
 
-#### What it does
+### What it does
 
 1. **Windows.** Generates a Lua import library from the bundled `.def` file, then builds `plugin_hello.dll` via CMake (x86).
-2. **macOS.** Builds separately for x86_64 and arm64, then combines into a universal binary with `lipo`.
-3. **Linux.** Builds `plugin_hello.so` via CMake.
-4. **iOS.** Builds `libplugin_hello.a` static libraries for device (arm64) and Simulator (arm64 + x86_64).
-5. **Android.** Builds `libplugin_hello.so` for all ABIs (armeabi-v7a, arm64-v8a, x86, x86_64) using the Android NDK.
-6. **Package.** Assembles the full plugin distribution:
-   - Copies the compiled binaries from steps 1–5.
+2. **macOS.** Builds separately for x86_64 (deployment target macOS 10.13) and arm64 (macOS 11.0) via CMake, then combines them into a universal binary with `lipo`.
+3. **Linux.** Builds `plugin_hello.so` via CMake inside an Ubuntu 20.04 container, so the library needs nothing newer than glibc 2.31 and loads on distributions as old as that one. That container's CMake is older than the 3.19 this project needs, so `tools/pin_cmake.sh` installs a pinned, SHA-256-verified CMake 4.4.3 first.
+4. **iOS.** Runs `tools/build_apple.sh ios`: `libplugin_hello.a` static libraries via CMake for device (arm64) and Simulator (arm64 + x86_64), deployment target iOS 15.0.
+5. **tvOS.** Runs `tools/build_apple.sh tvos`: the same two static libraries for Apple TV, deployment target tvOS 15.0.
+6. **Android.** Runs `tools/build_android.sh`: `libplugin_hello.so` for all ABIs (armeabi-v7a, arm64-v8a, x86, x86_64) at API level 21, using the CMake toolchain of the Android NDK, which is preinstalled on the GitHub runners. The libraries are linked with `-Wl,-z,max-page-size=16384` so they are 16 KB page-aligned: Android 15+ runs on devices with 16 KB memory pages and rejects 4 KB-aligned libraries, and only NDK r28+ aligns by default.
+7. **Package.** Assembles the full plugin distribution:
+   - Copies the compiled binaries from steps 1-6 into the layout each platform's app build expects (see [Manual setup from local builds](#manual-setup-from-local-builds)).
    - Copies the HTML5 JavaScript plugin from `web/plugin_hello.js` and its `web/metadata.lua`.
    - Copies the Lua fallback stub from `lua/plugin_hello.lua` and its `lua/metadata.lua`.
    - Generates a `metadata.lua` for each platform.
    - Creates per-platform `data.tgz` tarballs for self-hosted distribution.
 
-#### Artifacts
+The iOS and tvOS libraries get one extra step. An app links every plugin's static library into the same executable, so two plugins that both define a global function called `helper` would collide. `tools/merge_static_libs.sh` prelinks each library so that `luaopen_plugin_hello` is its only global symbol, and fails the build if any other one is left.
+
+Every build job ends by checking what it built, and a failed check stops the run before anything is packaged:
+
+- Every platform: the exported `luaopen_plugin_hello` symbol.
+- macOS, iOS, tvOS: the expected architectures and the minimum OS version stamped into the binary.
+- macOS: the library links only libraries that macOS itself ships.
+- Linux: no glibc symbol version newer than 2.31, and no linked library beyond the C/C++ runtime and X11.
+- Android: every LOAD segment is 16 KB-aligned.
+
+The Apple jobs run on the `macos-15` runner. Its default Xcode 16.4 still accepts macOS 10.13 as a deployment target, while Xcode 26 starts at macOS 11 ([Xcode support matrix](https://developer.apple.com/support/xcode/)).
+
+The same scripts run outside CI on a matching machine, with CMake 3.19+ and `python3` installed: `bash tools/build_apple.sh <ios|tvos> [output dir]` on macOS with Xcode, `bash tools/build_android.sh [output dir]` with `ANDROID_NDK_HOME` set, and `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release` for the desktop library.
+
+CMake 4.4.3 is pinned in two files, each with its own download hash: `local_build.bat` and `tools/pin_cmake.sh`. Update both when you move to a newer CMake.
+
+### Artifacts
 
 Every successful workflow run produces these downloadable artifacts:
 
@@ -248,24 +187,30 @@ Every successful workflow run produces these downloadable artifacts:
 | `linux` | `plugin_hello.so` |
 | `iphone` | `libplugin_hello.a` (device, arm64) |
 | `iphone-sim` | `libplugin_hello.a` (simulator, arm64 + x86_64) |
+| `appletvos` | `libplugin_hello.a` (device, arm64) |
+| `appletvsimulator` | `libplugin_hello.a` (simulator, arm64 + x86_64) |
 | `android` | `libplugin_hello.so` (all ABIs) |
 | `plugin-distribution` | Full plugin directory structure with raw files for all platforms |
-| `plugin-tarballs` | Ready-to-install `data.tgz` tarballs in `com.xedur/plugin.hello/<platform>/` structure |
+| `plugin-tarballs` | Ready-to-install `data.tgz` tarballs in `<publisherId>/<plugin.name>/<platform>/` structure (here, `com.xedur/plugin.hello/`) |
 
 The `plugin-tarballs` artifact is the most useful one for app builds. Extract it and copy the `com.xedur` folder directly into your `Solar2DPlugins` directory. See [Installing for App Builds](#installing-for-app-builds) for details.
 
-#### Releases
+### Releases
 
-Pushing a tag matching `v*` (e.g., `v1.0.0`) automatically creates a GitHub Release with the platform tarballs attached.
+Each manual run creates or updates a GitHub Release tagged `v<pluginVersion>` (read from `metadata.json`) and attaches the per-platform tarballs, named `<solar2dBuild>-<platform>.tgz`. A new tag is created on the commit the run built. This asset naming is what the Solar2D Free Plugin Directory expects of a release; see [PUBLISHING.md](PUBLISHING.md).
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+To cut a release, bump `pluginVersion` in `metadata.json` and run the workflow.
 
-#### Updating the Plugin Version
+Re-running the workflow with the same `pluginVersion` replaces the tarballs of that release that have the same names, and nothing else: the tag stays on the commit it was first created on, and a tarball from the earlier run that the new run does not produce (after removing a platform or changing `solar2dBuild`) stays attached. Bump `pluginVersion` whenever the code, the platform list, or `solar2dBuild` changes.
 
-The `PLUGIN_VERSION` value controls the version directory name in the distribution structure. Manual runs can set it via the `plugin_version` input on the workflow dispatch form; tag-triggered runs use the default defined at the top of the workflow. Update the default when targeting a different Solar2D build number.
+### Updating the Plugin Version
+
+Two separate versions live in `metadata.json`, and they are not the same thing:
+
+- `pluginVersion` is your plugin's own version (e.g. `1.0.0`). It becomes the GitHub Release tag.
+- `solar2dBuild` is the minimum Solar2D build number your binaries target (e.g. `2025.3726`). It is the version directory in the distribution structure and the prefix of each release tarball.
+
+Bump `solar2dBuild` when you rebuild against a newer Solar2D release; bump `pluginVersion` when you ship a new version of your plugin.
 
 ---
 
@@ -279,7 +224,7 @@ The Solar2D Simulator loads plugins at runtime from a platform-specific director
 | macOS    | `~/Library/Application Support/Corona/Simulator/Plugins/plugin_hello.dylib` |
 | Linux    | `~/.Solar2D/Plugins/plugin_hello.so` |
 
-The Solar2D Native build scripts do this automatically. If you built with CMake or GitHub Actions, you need to copy the file manually.
+On Windows, `local_build.bat` does this automatically. On macOS and Linux, download the platform's artifact from a GitHub Actions run and copy the binary manually.
 
 This is sufficient for testing your plugin in the Simulator. However, when you build your app for distribution (e.g. "File > Build > Windows"), the Simulator plugins directory is **not** used. You need to set up the `Solar2DPlugins` directory for that, as described in the next section.
 
@@ -289,59 +234,78 @@ This is sufficient for testing your plugin in the Simulator. However, when you b
 
 When Solar2D builds your app for a target platform (Windows desktop, macOS, HTML5, etc.), it looks for plugins in the `Solar2DPlugins` directory. Each plugin needs to be packaged as a `data.tgz` tarball inside a platform-specific subdirectory.
 
+On Windows, `local_build.bat` installs the `win32`, `win32-sim`, and `lua` platforms automatically. For every other platform, use the CI tarballs.
+
 ### Using the plugin-tarballs artifact (recommended)
 
-The easiest approach. Download the `plugin-tarballs` artifact from a GitHub Actions workflow run, extract the zip, and copy the `com.xedur` folder into your `Solar2DPlugins` directory:
+Download the `plugin-tarballs` artifact from a GitHub Actions workflow run, extract the zip, and copy the `com.xedur` folder into your `Solar2DPlugins` directory:
 
 | OS | Solar2DPlugins Path |
 |----|---------------------|
 | Windows | `%APPDATA%\Solar2DPlugins\` |
 | macOS | `~/Solar2DPlugins/` |
-| Linux | `~/Solar2DPlugins/` |
+| Linux | `~/.Solar2D/` |
 
 The artifact already contains the correct directory structure:
 
 ```
 com.xedur/plugin.hello/
   win32-sim/data.tgz
+  win32/data.tgz
   mac-sim/data.tgz
+  macos/data.tgz
   linux/data.tgz
   iphone/data.tgz
   iphone-sim/data.tgz
+  appletvos/data.tgz
+  appletvsimulator/data.tgz
   android/data.tgz
   web/data.tgz
   lua/data.tgz
 ```
 
+`win32` and `macos` are the app-build counterparts of `win32-sim` and `mac-sim` and hold the same binaries. An app build falls back from `win32` to `win32-sim` and from `macos` to `mac-sim` when the first is missing.
+
+Solar2D also accepts an optional Solar2D build directory between the plugin name and the platform (`com.xedur/plugin.hello/2025.3726/win32-sim/data.tgz`), and picks the newest such directory that does not exceed the Solar2D build doing the building. The flat layout above is simpler and preferred when you only track one Solar2D build.
+
 ### Manual setup from local builds
 
-If you built locally instead of using GitHub Actions, you need to create the tarballs yourself.
+If you need to create the tarballs yourself, each platform needs a directory with these contents, which become the root of its `data.tgz`:
 
-Each platform needs a directory containing a plugin binary and a `metadata.lua`. The `metadata.lua` file tells Solar2D what kind of plugin it is. Desktop and Android native plugins use `format = "sharedLibrary"`. iOS plugins use `format = "staticLibrary"` and must also list the library name in `staticLibs` (without the `lib` prefix, e.g. `staticLibs = { "plugin_hello" }`); without it, the iOS build never links the static library and `require` fails at runtime. The HTML5 plugin uses `format = "javascript"`; the HTML5 loader resolves the plugin purely by filename (`plugin_hello.js`), so the format string only matters on the packaging side. The Lua stub uses `format = "lua"`. See the `web/metadata.lua` and `lua/metadata.lua` files in this repository for examples.
+| Platform | Contents |
+|----------|----------|
+| `win32-sim`, `win32` | `plugin_hello.dll`, `metadata.lua` |
+| `mac-sim`, `macos` | `plugin_hello.dylib`, `metadata.lua` |
+| `linux` | `x86-64/plugin.hello.so`, `metadata.lua` |
+| `iphone`, `iphone-sim`, `appletvos`, `appletvsimulator` | `libplugin_hello.a`, `metadata.lua` |
+| `android` | `jniLibs/<abi>/libplugin.hello.so` for each ABI, `metadata.lua` |
+| `web` | `plugin_hello.js`, `metadata.lua` |
+| `lua` | `lua_51/plugin/hello.lua`, `lua/lua_51/plugin/hello.lua`, `metadata.lua` |
 
-Android needs one extra level: the `.so` files must sit under `jniLibs/<abi>/` inside the tarball, next to `metadata.lua`. The Android app build only collects plugin native libraries from `jniLibs/` paths; bare `<abi>/` directories get mis-collected into a broken armeabi-v7a-only layout. The `android` directory should look like this before tarring:
+The `metadata.lua` file tells Solar2D what kind of plugin it is, and always sits at the root of the tarball. Desktop and Android native plugins use `format = "sharedLibrary"`. iOS and tvOS plugins use `format = "staticLibrary"` and must also list the library name in `staticLibs` (without the `lib` prefix, e.g. `staticLibs = { "plugin_hello" }`); without it, the app build never links the static library and `require` fails at runtime. The HTML5 plugin uses `format = "javascript"`; the HTML5 loader resolves the plugin purely by filename (`plugin_hello.js`), so the format string only matters on the packaging side. The Lua stub uses `format = "lua"`. See the `web/metadata.lua` and `lua/metadata.lua` files in this repository for examples.
+
+Three of those layouts are stricter than they look, and a wrong one fails only on the device or in the built app, never in the Simulator:
+
+- **Android.** The `.so` files must sit under `jniLibs/<abi>/`: the Android app build only collects plugin native libraries from `jniLibs/` paths, and bare `<abi>/` directories get mis-collected into a broken armeabi-v7a-only layout. The file must be named after the `require` name with its dot (`libplugin.hello.so`), because that is the file name the app opens.
+- **Linux.** A Linux app build copies only two folders out of a plugin tarball: `x86-64/` (binaries) and `lua/lua_51/` (Lua files). A `.so` at the tarball root is ignored. The file is named `plugin.hello.so`, again after the `require` name.
+- **Lua fallback.** The stub is stored on its `require` path, `plugin/hello.lua`, because an app build names it inside the app from that path. It is stored twice: under `lua_51/`, which most platforms read, and under `lua/lua_51/`, which Linux reads.
+
+The `android` directory looks like this before tarring:
 
 ```
 android/
   metadata.lua
   jniLibs/
-    armeabi-v7a/libplugin_hello.so
-    arm64-v8a/libplugin_hello.so
-    x86/libplugin_hello.so
-    x86_64/libplugin_hello.so
+    armeabi-v7a/libplugin.hello.so
+    arm64-v8a/libplugin.hello.so
+    x86/libplugin.hello.so
+    x86_64/libplugin.hello.so
 ```
 
 For each platform directory, create a `data.tgz` tarball containing its files:
 
 ```bash
-cd win32-sim && tar -czf data.tgz * && cd ..
-cd mac-sim && tar -czf data.tgz * && cd ..
-cd linux && tar -czf data.tgz * && cd ..
-cd iphone && tar -czf data.tgz * && cd ..
-cd iphone-sim && tar -czf data.tgz * && cd ..
-cd android && tar -czf data.tgz * && cd ..
-cd web && tar -czf data.tgz * && cd ..
-cd lua && tar -czf data.tgz * && cd ..
+tar -czf data.tgz -C win32-sim .
 ```
 
 Then place each `data.tgz` into the correct subdirectory under `Solar2DPlugins`:
@@ -371,7 +335,7 @@ Solar2D's build process searches for the plugin in this order:
 1. **Custom URL.** Checked if `supportedPlatforms` is provided with URLs (see [Self-Hosted Distribution](#self-hosted-distribution)).
 2. **Solar2DPlugins directory.** Looks for `<Solar2DPlugins>/<publisherId>/<plugin name>/<platform>/data.tgz`.
 3. **Solar2D Marketplace.** Checked if `marketplaceId` is set.
-4. **Solar2D Directory.** The official Solar2D plugin directory.
+4. **Solar2D Directory.** The official Solar2D Free Plugin Directory. To submit your plugin there, see [PUBLISHING.md](PUBLISHING.md).
 
 For local development, option 2 (Solar2DPlugins) is the most practical.
 
@@ -381,7 +345,7 @@ For local development, option 2 (Solar2DPlugins) is the most practical.
 
 Instead of installing tarballs locally, you can host them on any HTTPS server and reference them in `build.settings`. This is useful for distributing your plugin to other developers without going through the Solar2D Marketplace.
 
-Upload the per-platform `.tgz` files from a GitHub Release (or from the `plugin-tarballs` CI artifact) to your server, then add `supportedPlatforms` to `build.settings`:
+Upload the per-platform `.tgz` files from a GitHub Release (or from the `plugin-tarballs` CI artifact) to your server, then add `supportedPlatforms` to `build.settings`. The release tarballs are named `<solar2dBuild>-<platform>.tgz` (e.g. `2025.3726-win32-sim.tgz`):
 
 ```lua
 settings =
@@ -393,13 +357,17 @@ settings =
             publisherId = "com.xedur",
             supportedPlatforms =
             {
-                ["win32-sim"]  = { url = "https://example.com/plugins/win32-sim.tgz" },
-                ["mac-sim"]    = { url = "https://example.com/plugins/mac-sim.tgz" },
-                linux          = { url = "https://example.com/plugins/linux.tgz" },
-                iphone         = { url = "https://example.com/plugins/iphone.tgz" },
-                ["iphone-sim"] = { url = "https://example.com/plugins/iphone-sim.tgz" },
-                android        = { url = "https://example.com/plugins/android.tgz" },
-                web            = { url = "https://example.com/plugins/web.tgz" },
+                ["win32-sim"] = { url = "https://example.com/plugins/2025.3726-win32-sim.tgz" },
+                win32 = { url = "https://example.com/plugins/2025.3726-win32.tgz" },
+                ["mac-sim"] = { url = "https://example.com/plugins/2025.3726-mac-sim.tgz" },
+                macos = { url = "https://example.com/plugins/2025.3726-macos.tgz" },
+                linux = { url = "https://example.com/plugins/2025.3726-linux.tgz" },
+                iphone = { url = "https://example.com/plugins/2025.3726-iphone.tgz" },
+                ["iphone-sim"] = { url = "https://example.com/plugins/2025.3726-iphone-sim.tgz" },
+                appletvos = { url = "https://example.com/plugins/2025.3726-appletvos.tgz" },
+                appletvsimulator = { url = "https://example.com/plugins/2025.3726-appletvsimulator.tgz" },
+                android = { url = "https://example.com/plugins/2025.3726-android.tgz" },
+                web = { url = "https://example.com/plugins/2025.3726-web.tgz" },
             },
         },
     },
@@ -414,7 +382,9 @@ When `supportedPlatforms` with URLs is provided, Solar2D downloads the tarball d
 
 The [`sample/`](sample/) directory contains a Solar2D project that exercises the plugin.
 
-1. Build the plugin using any of the methods above.
+1. Build the plugin: on Windows, run `local_build.bat` (it installs everything automatically); otherwise download binaries from a GitHub Actions run.
 2. Install the binary into the Simulator plugins directory (see [Installing for the Simulator](#installing-for-the-simulator)).
 3. Open the Solar2D Simulator and load `sample/main.lua`.
-4. To test app builds (Windows, macOS, HTML5), set up the `Solar2DPlugins` directory as described in [Installing for App Builds](#installing-for-app-builds).
+4. To test app builds (Windows, macOS, HTML5), set up the `Solar2DPlugins` directory as described in [Installing for App Builds](#installing-for-app-builds). On Windows, `local_build.bat` has already done this for the Windows platforms.
+
+The sample declares the plugin by its default identity (`plugin.hello`, `com.xedur`). If you renamed the plugin, update `sample/build.settings` and `sample/main.lua` to match.

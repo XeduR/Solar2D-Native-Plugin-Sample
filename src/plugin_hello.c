@@ -26,12 +26,24 @@
     #define PLUGIN_EXPORT
 #endif
 
+/* Entry point must be luaopen_<binary name>; CORONA_PLUGIN_NAME is supplied at build
+   time from metadata.json (dots to underscores). The fallback lets this file compile alone. */
+#ifndef CORONA_PLUGIN_NAME
+    #define CORONA_PLUGIN_NAME plugin_hello
+#endif
+#define PLUGIN_PASTE_(a, b) a ## b
+#define PLUGIN_PASTE(a, b) PLUGIN_PASTE_(a, b)
+#define PLUGIN_LUAOPEN PLUGIN_PASTE(luaopen_, CORONA_PLUGIN_NAME)
+
 /* Determine platform name at compile time */
 #if defined(_WIN32)
     #define PLATFORM_NAME "Windows"
 #elif defined(__APPLE__)
     #include <TargetConditionals.h>
-    #if TARGET_OS_IPHONE
+    /* TARGET_OS_IPHONE is also set on tvOS, so tvOS is checked first */
+    #if TARGET_OS_TV
+        #define PLATFORM_NAME "tvOS"
+    #elif TARGET_OS_IPHONE
         #define PLATFORM_NAME "iOS"
     #else
         #define PLATFORM_NAME "macOS"
@@ -72,9 +84,9 @@ static const luaL_Reg kHelloFunctions[] =
     { NULL, NULL }
 };
 
-/* Plugin entry point */
+/* Plugin entry point: luaopen_plugin_hello by default (see CORONA_PLUGIN_NAME above) */
 PLUGIN_EXPORT
-int luaopen_plugin_hello(lua_State *L)
+int PLUGIN_LUAOPEN(lua_State *L)
 {
     /* NULL name keeps the module out of _G; require() uses the returned table */
     lua_newtable(L);

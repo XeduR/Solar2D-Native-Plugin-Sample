@@ -1,84 +1,116 @@
-cmake_minimum_required(VERSION 3.10)
+# Solar2D Hello Plugin build configuration, used for every native platform.
+# Builds a library that exposes luaopen_<plugin name>: a static archive on iOS
+# and tvOS, a shared library everywhere else.
+#
+# string(JSON ...) requires CMake 3.19 or newer.
+cmake_minimum_required(VERSION 3.19)
 
-project(plugin_hello C)
+# Plugin identity lives only in metadata.json. Derive the binary/symbol name from it
+# (Lua module name with dots replaced by underscores, e.g. plugin.hello -> plugin_hello).
+file(READ "${CMAKE_CURRENT_LIST_DIR}/metadata.json" PLUGIN_METADATA)
+string(JSON PLUGIN_NAME_DOTTED GET "${PLUGIN_METADATA}" pluginName)
+string(REPLACE "." "_" PLUGIN_TARGET "${PLUGIN_NAME_DOTTED}")
 
-# Solar2D Hello Plugin build configuration
-# Builds a shared library (.dll / .dylib / .so) for Solar2D
+project(${PLUGIN_TARGET} C)
 
 set(CMAKE_C_STANDARD 99)
 
-# Configurable paths for Lua 5.1
+# Configurable paths for Lua 5.1; the bundled headers are the fallback.
 set(LUA_INCLUDE_DIR "" CACHE PATH "Path to Lua 5.1 headers")
 set(LUA_LIBRARY "" CACHE FILEPATH "Path to Lua 5.1 library (for linking on Windows)")
 
-# Source files
+# The only source list: every platform's build compiles these files.
 set(PLUGIN_SOURCES
     src/plugin_hello.c
 )
 
-# Create shared library
-add_library(plugin_hello SHARED ${PLUGIN_SOURCES})
-
-# Lua headers
-if(LUA_INCLUDE_DIR AND EXISTS "${LUA_INCLUDE_DIR}")
-    target_include_directories(plugin_hello PRIVATE "${LUA_INCLUDE_DIR}")
-else()
-    # Fall back to bundled headers
-    target_include_directories(plugin_hello PRIVATE external/lua51)
+# iOS and tvOS apps link plugins statically (via staticLibs in metadata.lua);
+# every other platform loads a shared library at runtime.
+set(PLUGIN_APPLE_STATIC FALSE)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS")
+    set(PLUGIN_APPLE_STATIC TRUE)
 endif()
 
-# Platform-specific configuration
-if(WIN32)
-    # Windows: link against Lua 5.1 library
+if(PLUGIN_APPLE_STATIC)
+    add_library(${PLUGIN_TARGET} STATIC ${PLUGIN_SOURCES})
+else()
+    add_library(${PLUGIN_TARGET} SHARED ${PLUGIN_SOURCES})
+endif()
+
+# The luaopen_ entry point name is pasted from this define at compile time.
+target_compile_definitions(${PLUGIN_TARGET} PRIVATE CORONA_PLUGIN_NAME=${PLUGIN_TARGET})
+
+if(LUA_INCLUDE_DIR AND EXISTS "${LUA_INCLUDE_DIR}")
+    target_include_directories(${PLUGIN_TARGET} PRIVATE "${LUA_INCLUDE_DIR}")
+else()
+    target_include_directories(${PLUGIN_TARGET} PRIVATE external/lua51)
+endif()
+
+if(PLUGIN_APPLE_STATIC)
+    # lib<name>.a via the default prefix and suffix.
+    set_target_properties(${PLUGIN_TARGET} PROPERTIES OUTPUT_NAME "${PLUGIN_TARGET}")
+
+elseif(WIN32)
+    # Windows: link against the Lua 5.1 import library.
     if(LUA_LIBRARY AND EXISTS "${LUA_LIBRARY}")
-        target_link_libraries(plugin_hello PRIVATE "${LUA_LIBRARY}")
+        target_link_libraries(${PLUGIN_TARGET} PRIVATE "${LUA_LIBRARY}")
     else()
         find_library(LUA51_LIB NAMES lua51 lua5.1 lua)
         if(LUA51_LIB)
-            target_link_libraries(plugin_hello PRIVATE ${LUA51_LIB})
+            target_link_libraries(${PLUGIN_TARGET} PRIVATE ${LUA51_LIB})
         else()
             message(WARNING "Lua library not found. Set -DLUA_LIBRARY=<path to lua51.lib>")
         endif()
     endif()
 
-    # Output: plugin_hello.dll
-    set_target_properties(plugin_hello PROPERTIES
-        OUTPUT_NAME "plugin_hello"
+    set_target_properties(${PLUGIN_TARGET} PROPERTIES
+        OUTPUT_NAME "${PLUGIN_TARGET}"
         PREFIX ""
         SUFFIX ".dll"
     )
 
-elseif(APPLE)
-    # macOS: allow undefined Lua symbols (resolved at runtime by Solar2D host)
-    target_link_options(plugin_hello PRIVATE "-undefined" "dynamic_lookup")
+elseif(ANDROID)
+    # lib<name>.so via the default prefix; the jniLibs/<abi>/ nesting happens
+    # in the packaging step.
+    set_target_properties(${PLUGIN_TARGET} PROPERTIES OUTPUT_NAME "${PLUGIN_TARGET}")
 
-    # Output: plugin_hello.dylib
-    set_target_properties(plugin_hello PROPERTIES
-        OUTPUT_NAME "plugin_hello"
+    # Android 15+ devices can use 16 KB memory pages, where a library with
+    # 4 KB-aligned LOAD segments fails to load. NDK r28+ aligns by default,
+    # r27 and older need these flags.
+    target_link_options(${PLUGIN_TARGET} PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384"
+    )
+
+elseif(APPLE)
+    # macOS: Lua symbols resolve against the host process at load time.
+    target_link_options(${PLUGIN_TARGET} PRIVATE "-undefined" "dynamic_lookup")
+
+    set_target_properties(${PLUGIN_TARGET} PROPERTIES
+        OUTPUT_NAME "${PLUGIN_TARGET}"
         PREFIX ""
         SUFFIX ".dylib"
     )
 
 elseif(UNIX)
-    # Linux: undefined Lua symbols are allowed by default for shared libraries; the Solar2D host resolves them at runtime
-
-    # Output: plugin_hello.so
-    set_target_properties(plugin_hello PROPERTIES
-        OUTPUT_NAME "plugin_hello"
+    # Linux: undefined Lua symbols in a .so are allowed by default and resolve
+    # against the host process at load time.
+    set_target_properties(${PLUGIN_TARGET} PROPERTIES
+        OUTPUT_NAME "${PLUGIN_TARGET}"
         PREFIX ""
         SUFFIX ".so"
     )
 endif()
 
-# Hide internal symbols, only export luaopen_plugin_hello (marked with PLUGIN_EXPORT)
+# Hide internal symbols so only luaopen_<plugin name> (marked with PLUGIN_EXPORT) stays visible.
 if(NOT WIN32)
-    set_target_properties(plugin_hello PROPERTIES
+    set_target_properties(${PLUGIN_TARGET} PROPERTIES
         C_VISIBILITY_PRESET hidden
     )
 endif()
 
-# Install targets
-install(TARGETS plugin_hello
+install(TARGETS ${PLUGIN_TARGET}
     LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )

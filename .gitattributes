@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# cmd.exe misparses labels in LF-only batch files; always check out as CRLF
+*.bat text eol=crlf
+
+# Shell scripts must stay LF for bash regardless of checkout platform
+*.sh text eol=lf
+
+# Committed binaries: never line-ending convert, even if the first bytes hold no NUL
+*.png binary

@@ -3,6 +3,9 @@ build/
 build-*/
 dist/
 
+# Portable CMake downloaded by local_build.bat
+.tools/
+
 # Windows artifacts
 nul
 Thumbs.db
