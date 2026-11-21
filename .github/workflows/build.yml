@@ -456,7 +456,7 @@ jobs:
           rewrite() {
             sed -e "s/\b${SRC_DOTTED_ESC}\(\b\|_\)/${NAME_DOTTED}\1/g" \
                 -e "s/\b${SRC_ESC}\(\b\|_\)/${NAME}\1/g" \
-                -e "s/\bcom\.xedur\b/${PUBLISHER}/g"
+                -e "s/\bcom\.example\b/${PUBLISHER}/g"
           }
 
           # The fallback ships on its require path: plugin/<name>.lua.

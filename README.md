@@ -45,7 +45,7 @@ settings =
     {
         ["plugin.hello"] =
         {
-            publisherId = "com.xedur",
+            publisherId = "com.example",
         },
     },
 }
@@ -66,7 +66,9 @@ To see the plugin run, open the project in [`sample/`](sample/) in the Simulator
 
 ## Making Your Own Plugin
 
-To turn the sample into your own plugin, edit [`metadata.json`](metadata.json): plugin name, publisher id, versions, and platforms. Every build path reads it, so you do not rename files or edit the build scripts. The sample project in [`sample/`](sample/) declares the default identity, so update it too if you rename the plugin. See [Configuring the Plugin](BUILDING.md#configuring-the-plugin).
+To turn the sample into your own plugin, edit [`metadata.json`](metadata.json): plugin name, publisher id, versions, platforms, and URL. Every build path reads it, so you do not rename files or edit the build scripts. The sample project in [`sample/`](sample/) declares the default identity, so update it too if you rename the plugin. See [Configuring the Plugin](BUILDING.md#configuring-the-plugin).
+
+The publisher id `com.example` and the URL in `metadata.json` are placeholders. Before you distribute a plugin, set your own, and replace this `README.md` and the `LICENSE` file with your plugin's own.
 
 To submit a finished plugin to the Solar2D Free Plugin Directory, see [PUBLISHING.md](PUBLISHING.md).
 
@@ -76,7 +78,7 @@ To submit a finished plugin to the Solar2D Free Plugin Directory, see [PUBLISHIN
 
 ## License
 
-[MIT](LICENSE)
+[MIT-0](LICENSE)
 
 Bundled third-party code:
 

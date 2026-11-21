@@ -284,7 +284,7 @@ REM Linux reads only lua/lua_51.
 set "_LS_NAMEPATH=%PLUGIN_NAME_DOTTED:.=\%"
 set "_TPL_DST=!STAGE!\lua_51\%_LS_NAMEPATH%.lua"
 set "_TPL_DST_NESTED=!STAGE!\lua\lua_51\%_LS_NAMEPATH%.lua"
-powershell -NoProfile -Command "$t = Get-Content -Raw -LiteralPath $env:_TPL_SRC; $t = [regex]::Replace($t, '\b' + [regex]::Escape($env:_SRC_DOTTED) + '(\b|_)', $env:PLUGIN_NAME_DOTTED + '$1'); $t = [regex]::Replace($t, '\b' + [regex]::Escape($env:_SRC_NAME) + '(\b|_)', $env:PLUGIN_NAME + '$1'); $t = [regex]::Replace($t, '\bcom\.xedur\b', $env:PUBLISHER_ID); [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($env:_TPL_DST)); [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($env:_TPL_DST_NESTED)); Set-Content -NoNewline -LiteralPath $env:_TPL_DST -Value $t" >> "!LOG!" 2>&1
+powershell -NoProfile -Command "$t = Get-Content -Raw -LiteralPath $env:_TPL_SRC; $t = [regex]::Replace($t, '\b' + [regex]::Escape($env:_SRC_DOTTED) + '(\b|_)', $env:PLUGIN_NAME_DOTTED + '$1'); $t = [regex]::Replace($t, '\b' + [regex]::Escape($env:_SRC_NAME) + '(\b|_)', $env:PLUGIN_NAME + '$1'); $t = [regex]::Replace($t, '\bcom\.example\b', $env:PUBLISHER_ID); [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($env:_TPL_DST)); [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($env:_TPL_DST_NESTED)); Set-Content -NoNewline -LiteralPath $env:_TPL_DST -Value $t" >> "!LOG!" 2>&1
 if not exist "!_TPL_DST!" (
 	echo WARNING: could not generate the lua stub at !_TPL_DST!. >> "!LOG!"
 	set "PACKAGE_FAILED=1"

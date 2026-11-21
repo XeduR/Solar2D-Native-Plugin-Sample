@@ -10,7 +10,7 @@ settings =
     {
         ["plugin.hello"] =
         {
-            publisherId = "com.xedur",
+            publisherId = "com.example",
         },
     },
 

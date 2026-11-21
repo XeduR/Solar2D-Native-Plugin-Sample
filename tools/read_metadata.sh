@@ -22,7 +22,7 @@ import json, re, shlex, sys
 # The identifier starts with a letter: local_build.bat's delims=_ split drops a leading underscore.
 RULES = {
     "pluginName": (r"plugin\.[A-Za-z][A-Za-z0-9_]*", "plugin.<identifier> with a single dot, starting with a letter, e.g. plugin.hello"),
-    "publisherId": (r"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*", "reverse-domain with no hyphens, e.g. com.xedur"),
+    "publisherId": (r"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*", "reverse-domain with no hyphens, e.g. com.example"),
     "pluginVersion": (r"[0-9A-Za-z][0-9A-Za-z._-]*", "a release tag suffix, e.g. 1.0.0"),
     "solar2dBuild": (r"[0-9]{4}\.[0-9]{4}", "a Solar2D build number in YYYY.NNNN form, e.g. 2025.3726"),
 }

@@ -1,11 +1,8 @@
 -- plugin_hello.lua
 -- Lua stub for platforms where the native hello plugin is not available.
---
--- Copyright (c) 2026 Eetu Rantanen
--- MIT License
 
 local Library = require( "CoronaLibrary" )
-local lib = Library:new{ name = "plugin.hello", publisherId = "com.xedur" }
+local lib = Library:new{ name = "plugin.hello", publisherId = "com.example" }
 
 
 lib.getGreeting = function()

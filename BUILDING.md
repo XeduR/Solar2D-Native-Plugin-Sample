@@ -52,27 +52,27 @@ The plugin's identity is set in one file, [`metadata.json`](metadata.json):
 
 ```json
 {
-    "publisherId": "com.xedur",
+    "publisherId": "com.example",
     "pluginName": "plugin.hello",
     "pluginVersion": "1.0.0",
     "solar2dBuild": "2025.3726",
     "platforms": ["windows", "macos", "linux", "ios", "tvos", "android"],
-    "url": "https://github.com/XeduR/Solar2D-Native-Plugin-Sample"
+    "url": "https://example.com/plugin-hello"
 }
 ```
 
 | Field | Meaning |
 |-------|---------|
-| `publisherId` | Reverse-domain publisher id. Must match the `publisherId` in your `build.settings`. |
+| `publisherId` | Reverse-domain publisher id. Must match the `publisherId` in your `build.settings`. The default `com.example` is a placeholder; set your own before you distribute a plugin. |
 | `pluginName` | The Lua module name, e.g. `plugin.hello`. The binary name and the `luaopen_` entry point are derived from it by replacing dots with underscores (`plugin_hello`). |
 | `pluginVersion` | Your plugin's own version. Used as the GitHub Release tag (`v1.0.0`). |
 | `solar2dBuild` | The minimum Solar2D build number your binaries target. Used as the distribution version directory and the release asset prefix. See [Updating the Plugin Version](#updating-the-plugin-version). |
 | `platforms` | Which native builds the CI workflow runs: any of `windows`, `macos`, `linux`, `ios`, `tvos`, `android`. Remove a platform your plugin does not support and its build job is skipped. The `web` and `lua` packages are made regardless. |
-| `url` | Your plugin's home page or repository. |
+| `url` | Your plugin's home page or repository. The default is a placeholder. |
 
 To turn this repo into your own plugin, edit `metadata.json`; the build files need no edits. Every build path reads it: CMake via `string(JSON ...)`, the CI workflow and the iOS, tvOS, and Android build scripts via `tools/read_metadata.sh`, and `local_build.bat` via PowerShell.
 
-The packaging steps also rewrite the plugin name and `publisherId` inside the `lua/` and `web/` files, so those files need no edits after a rename in `metadata.json`. The name to replace is taken from the fallback file's own name (`lua/plugin_hello.lua` gives `plugin_hello` and `plugin.hello`), and the publisher id replaced is `com.xedur`. An identifier that continues the name with an underscore (`plugin_hello_state`) is renamed with it. For that to work, `lua/` must hold `metadata.lua` plus exactly one other Lua file, and `web/` a `.js` file with the same base name.
+The packaging steps also rewrite the plugin name and `publisherId` inside the `lua/` and `web/` files, so those files need no edits after a rename in `metadata.json`. The name to replace is taken from the fallback file's own name (`lua/plugin_hello.lua` gives `plugin_hello` and `plugin.hello`), and the publisher id replaced is `com.example`. An identifier that continues the name with an underscore (`plugin_hello_state`) is renamed with it. For that to work, `lua/` must hold `metadata.lua` plus exactly one other Lua file, and `web/` a `.js` file with the same base name.
 
 `tools/read_metadata.sh` validates the fields and fails the build on bad values:
 
@@ -107,7 +107,7 @@ What it does:
 4. Generates the Lua 5.1 import library from `external/lua51/lua51.def`. Solar2D's Windows runtime ships its Lua as `lua.dll`, which is what the `.def` file targets.
 5. Builds the plugin DLL (x86) with CMake into `build-win32/`. Solar2D's Windows Simulator and Windows apps are 32-bit, so the plugin must be too.
 6. Copies the DLL to the Simulator plugins directory (`%APPDATA%\Corona Labs\Corona Simulator\Plugins`), when Solar2D is installed.
-7. Packages and installs `data.tgz` plugins under `%APPDATA%\Solar2DPlugins\com.xedur\plugin.hello\` for the `win32` (Windows app build), `win32-sim` (Simulator), and `lua` (fallback stub) platforms, so Windows app builds resolve the plugin too.
+7. Packages and installs `data.tgz` plugins under `%APPDATA%\Solar2DPlugins\com.example\plugin.hello\` for the `win32` (Windows app build), `win32-sim` (Simulator), and `lua` (fallback stub) platforms, so Windows app builds resolve the plugin too.
 
 Prerequisites: Visual Studio 2019, 2022, or 2026 with the "Desktop development with C++" workload. The script also needs `curl` and `tar` on the PATH; both ship with current Windows. The build log is written to `build-win32\build.log`.
 
@@ -176,9 +176,9 @@ Every successful workflow run produces these downloadable artifacts:
 | `appletvsimulator` | `libplugin_hello.a` (simulator, arm64 + x86_64) |
 | `android` | `libplugin_hello.so` (all ABIs) |
 | `plugin-distribution` | The unpacked `<solar2dBuild>/<platform>/` tree with the files of every packaged platform |
-| `plugin-tarballs` | Ready-to-install `data.tgz` tarballs in `<publisherId>/<plugin.name>/<platform>/` structure (here, `com.xedur/plugin.hello/`) |
+| `plugin-tarballs` | Ready-to-install `data.tgz` tarballs in `<publisherId>/<plugin.name>/<platform>/` structure (here, `com.example/plugin.hello/`) |
 
-The `plugin-tarballs` artifact is the most useful one for app builds. Extract it and copy the `com.xedur` folder directly into your `Solar2DPlugins` directory. See [Installing for App Builds](#installing-for-app-builds) for details.
+The `plugin-tarballs` artifact is the most useful one for app builds. Extract it and copy the `com.example` folder directly into your `Solar2DPlugins` directory. See [Installing for App Builds](#installing-for-app-builds) for details.
 
 ### Releases
 
@@ -219,7 +219,7 @@ On Windows, `local_build.bat` installs the `win32`, `win32-sim`, and `lua` platf
 
 ### Using the plugin-tarballs artifact (recommended)
 
-Download the `plugin-tarballs` artifact from a GitHub Actions workflow run, extract the zip, and copy the `com.xedur` folder into your `Solar2DPlugins` directory:
+Download the `plugin-tarballs` artifact from a GitHub Actions workflow run, extract the zip, and copy the `com.example` folder into your `Solar2DPlugins` directory:
 
 | OS | Solar2DPlugins Path |
 |----|---------------------|
@@ -230,7 +230,7 @@ Download the `plugin-tarballs` artifact from a GitHub Actions workflow run, extr
 The artifact already contains the correct directory structure:
 
 ```text
-com.xedur/plugin.hello/
+com.example/plugin.hello/
   win32-sim/data.tgz
   win32/data.tgz
   mac-sim/data.tgz
@@ -247,7 +247,7 @@ com.xedur/plugin.hello/
 
 `win32` and `macos` are the app-build counterparts of `win32-sim` and `mac-sim` and hold the same binaries. An app build falls back from `win32` to `win32-sim` and from `macos` to `mac-sim` when the first is missing.
 
-Solar2D also accepts an optional Solar2D build directory between the plugin name and the platform (`com.xedur/plugin.hello/2025.3726/win32-sim/data.tgz`), and picks the newest such directory that does not exceed the Solar2D build doing the building. The flat layout above is simpler and preferred when you only track one Solar2D build.
+Solar2D also accepts an optional Solar2D build directory between the plugin name and the platform (`com.example/plugin.hello/2025.3726/win32-sim/data.tgz`), and picks the newest such directory that does not exceed the Solar2D build doing the building. The flat layout above is simpler and preferred when you only track one Solar2D build.
 
 ### Manual setup from local builds
 
@@ -292,7 +292,7 @@ tar -czf data.tgz -C win32-sim .
 Then place each `data.tgz` into the correct subdirectory under `Solar2DPlugins`:
 
 ```text
-<Solar2DPlugins path>/com.xedur/plugin.hello/<platform>/data.tgz
+<Solar2DPlugins path>/com.example/plugin.hello/<platform>/data.tgz
 ```
 
 Only the `data.tgz` files are needed in each directory. Solar2D extracts them during the build process. The raw files (DLLs, Lua files, etc.) should not be placed alongside the tarballs.
@@ -306,7 +306,7 @@ plugins =
 {
     ["plugin.hello"] =
     {
-        publisherId = "com.xedur",
+        publisherId = "com.example",
     },
 },
 ```
@@ -333,7 +333,7 @@ settings =
     {
         ["plugin.hello"] =
         {
-            publisherId = "com.xedur",
+            publisherId = "com.example",
             supportedPlatforms =
             {
                 ["win32-sim"] = { url = "https://example.com/plugins/2025.3726-win32-sim.tgz" },

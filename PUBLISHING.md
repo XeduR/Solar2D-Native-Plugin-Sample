@@ -38,12 +38,12 @@ https://github.com/<ghAccount>/<publisherId>-<pluginName>/releases/download/<rel
 
 Two consequences follow from that URL, and both are hard requirements:
 
-- The repository holding the releases must be named `<publisherId>-<pluginName>`, for example `com.xedur-plugin.hello`. The directory tooling derives `publisherId` and the plugin name by splitting the repository name on the first hyphen.
+- The repository holding the releases must be named `<publisherId>-<pluginName>`, for example `com.example-plugin.hello`. The directory tooling derives `publisherId` and the plugin name by splitting the repository name on the first hyphen.
 - Each release asset must be named `<solar2dBuild>-<platform>.tgz`, for example `2025.3726-win32-sim.tgz`. The Solar2D build number must be in `YYYY.NNNN` form.
 
 ## Prerequisites
 
-- A `publisherId` you control. Reverse-domain form is the convention (`com.yourname`), and it must match the `publisherId` you set in `metadata.json` and that users will put in their `build.settings`.
+- A `publisherId` you control. The convention is the reverse form of a domain you own (`com.example` for `example.com`), and it must match the `publisherId` you set in `metadata.json` and that users will put in their `build.settings`. The sample's default `com.example` is a placeholder, so set your own before you publish.
 - A finished build of the plugin from the `Build Plugin` workflow, so you have its `plugin-distribution` artifact and its GitHub Release.
 
 At minimum you must ship a Lua stub for every platform you do not implement natively, so that developers can call your API on any target. This sample already builds a `lua` fallback tarball for that purpose.
@@ -74,7 +74,7 @@ The release tag here is a counter, not your `pluginVersion`. A developer who pin
 
 ## Route B: your own repository
 
-1. Name your plugin's GitHub repository `<publisherId>-<pluginName>` (for example `com.xedur-plugin.hello`).
+1. Name your plugin's GitHub repository `<publisherId>-<pluginName>` (for example `com.example-plugin.hello`).
 2. Bump `pluginVersion` in `metadata.json` and run the `Build Plugin` workflow. It attaches the `<solar2dBuild>-<platform>.tgz` tarballs to a release tagged `v<pluginVersion>`, which is the asset naming and layout the directory expects. See [BUILDING.md](BUILDING.md#releases).
 3. Confirm a tarball is reachable. With a browser or `curl`, the URL pattern above should download the file. If it 404s, the directory will fail to fetch your plugin for users.
 4. Add your entry to the directory with a pull request, as described in the next section.
@@ -83,14 +83,14 @@ If you build by hand, create the per-platform `data.tgz` tarballs as described i
 
 ## The directory entry
 
-Your entry is a single JSON file at `plugins/<publisherId>_<pluginName>.json`. The file name joins publisher and name with an underscore, while the repository name joins them with a hyphen. For this sample that file would be `plugins/com.xedur_plugin.hello.json`.
+Your entry is a single JSON file at `plugins/<publisherId>_<pluginName>.json`. The file name joins publisher and name with an underscore, while the repository name joins them with a hyphen. For this sample that file would be `plugins/com.example_plugin.hello.json`.
 
 On route A the directory writes this file for you from the latest release. On route B you add it yourself. Its shape is:
 
 ```json
 {
-    "ghAccount": "XeduR",
-    "publisherId": "com.xedur",
+    "ghAccount": "<your GitHub account>",
+    "publisherId": "com.example",
     "plugin": "plugin.hello",
     "latest": "v1.0.0",
     "supported": {
@@ -141,7 +141,7 @@ settings =
     {
         ["plugin.hello"] =
         {
-            publisherId = "com.xedur",
+            publisherId = "com.example",
         },
     },
 }
@@ -156,7 +156,7 @@ By default the build server always downloads the release tag recorded as `latest
 ```lua
 ["plugin.hello"] =
 {
-    publisherId = "com.xedur",
+    publisherId = "com.example",
     version = "v1.0.0",
     forceBuild = "2025.3726",
 },
@@ -174,7 +174,7 @@ If you maintain your own distribution and only want a discoverable catalog entry
 ```json
 {
     "plugin": "plugin.hello",
-    "publisherId": "com.xedur",
+    "publisherId": "com.example",
     "error": "Not provided by the Solar2D Free directory. Get it at https://example.com/plugins/hello."
 }
 ```

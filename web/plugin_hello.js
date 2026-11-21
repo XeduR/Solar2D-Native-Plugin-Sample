@@ -1,9 +1,6 @@
 /*
  * plugin_hello.js
  * Solar2D Hello Plugin - HTML5/Web JavaScript Implementation
- *
- * Copyright (c) 2026 Eetu Rantanen
- * MIT License
  */
 
 window.plugin_hello = {

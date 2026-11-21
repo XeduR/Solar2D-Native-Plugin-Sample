@@ -6,9 +6,6 @@
  * plugin without any platform-specific dependencies. The single function
  * hello.getGreeting() returns a greeting string that includes the
  * platform name and the current local time.
- *
- * Copyright (c) 2026 Eetu Rantanen
- * MIT License
  */
 
 #include "lua.h"
